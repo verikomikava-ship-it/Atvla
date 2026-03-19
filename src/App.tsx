@@ -425,7 +425,7 @@ export const App: React.FC = () => {
 
   const tabsRow1 = [
     { key: 'debts' as const, label: 'ვალები', icon: '💸' },
-    { key: 'bills' as const, label: 'გადასახადელები', icon: '📅' },
+    { key: 'bills' as const, label: 'ყოველთვიური გადასახადი', icon: '📅' },
     { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄' },
   ];
   const tabsRow2 = [
