@@ -155,6 +155,20 @@ export type Loan = {
   comment?: string;
 };
 
+// ლობარდი
+export type Lombard = {
+  id: number;
+  itemName: string;           // ნივთის დასახელება
+  principal: number;          // ძირი თანხა
+  monthlyInterest: number;    // ყოველთვიური პროცენტი
+  contractNumber?: string;    // ხელშეკრულების ნომერი (სურვილისამებრ)
+  paymentDay: number;         // გადახდის დღე (1-31)
+  debtId: number;             // დაკავშირებული ვალის ID
+  billIds: number[];          // დაკავშირებული ბილების ID-ები (12 თვე)
+  active: boolean;
+  createdAt: string;          // YYYY-MM-DD
+};
+
 export type IncomeType = 'salary' | 'freelance' | 'both';
 export type PayFrequency = 'monthly_1' | 'monthly_2' | 'biweekly' | 'weekly';
 
@@ -187,6 +201,7 @@ export type AppState = {
   bills: Bill[];
   subscriptions: Subscription[];
   loans: Loan[];
+  lombards: Lombard[];
   goal: number;
   goalName: string;
   profile: UserProfile;

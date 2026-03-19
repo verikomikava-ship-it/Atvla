@@ -19,6 +19,7 @@ const BACKUP_DATA: AppState = {
   subscriptions: [],
   bills: [],
   loans: [],
+  lombards: [],
   goal: 0,
   goalName: '',
   profile: DEFAULT_PROFILE,
@@ -74,6 +75,7 @@ export const loadState = (): AppState => {
 
     if (!parsed.subscriptions) parsed.subscriptions = [];
     if (!parsed.loans) parsed.loans = [];
+    if (!parsed.lombards) parsed.lombards = [];
     if (!parsed.goal && parsed.goal !== 0) parsed.goal = 0;
     if (!parsed.goalName) parsed.goalName = '';
     ensureProfile(parsed);
@@ -113,6 +115,7 @@ export const importData = (
       if (imported.db && imported.debts && imported.bills) {
         if (!imported.subscriptions) imported.subscriptions = [];
         if (!imported.loans) imported.loans = [];
+        if (!imported.lombards) imported.lombards = [];
         if (!imported.goal && imported.goal !== 0) imported.goal = 0;
         if (!imported.goalName) imported.goalName = '';
         ensureProfile(imported as unknown as Record<string, unknown>);
