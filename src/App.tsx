@@ -29,11 +29,13 @@ export const App: React.FC = () => {
   const stats = useMemo(() => calculateStats(state), [state]);
 
   const handleSetupComplete = useCallback(
-    (profile: UserProfile, bills: Bill[]) => {
+    (profile: UserProfile, bills: Bill[], setupDebts?: Debt[], setupLombards?: Lombard[]) => {
       const newState: AppState = {
         ...state,
         profile,
         bills: [...state.bills, ...bills],
+        debts: [...state.debts, ...(setupDebts || [])],
+        lombards: [...(state.lombards || []), ...(setupLombards || [])],
       };
       updateState(newState);
     },
