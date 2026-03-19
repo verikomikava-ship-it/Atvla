@@ -40,8 +40,9 @@ export const App: React.FC = () => {
   );
 
   const handleSaveDay = useCallback(
-    (date: string, data: DayData, debtPayments?: { debtId: number; amount: number }[]) => {
+    (date: string, data: DayData, debtPayments?: { debtId: number; amount: number }[], billPayments?: { billId: number; paid: boolean }[]) => {
       let updatedDebts = state.debts;
+      let updatedBills = state.bills;
 
       // ვალის გადახდების დამუშავება
       if (debtPayments && debtPayments.length > 0) {
@@ -61,6 +62,15 @@ export const App: React.FC = () => {
         });
       }
 
+      // ბილის გადახდების დამუშავება
+      if (billPayments && billPayments.length > 0) {
+        updatedBills = state.bills.map((bill) => {
+          const payment = billPayments.find((p) => p.billId === bill.id);
+          if (!payment) return bill;
+          return { ...bill, paid: payment.paid };
+        });
+      }
+
       const newState: AppState = {
         ...state,
         db: {
@@ -68,6 +78,7 @@ export const App: React.FC = () => {
           [date]: data,
         },
         debts: updatedDebts,
+        bills: updatedBills,
       };
       updateState(newState);
       setSelectedDay(null);
@@ -412,12 +423,14 @@ export const App: React.FC = () => {
     return <SetupWizard onComplete={handleSetupComplete} />;
   }
 
-  const tabs = [
-    { key: 'debts' as const, label: 'ვალები' },
-    { key: 'bills' as const, label: 'ბილები' },
-    { key: 'subscriptions' as const, label: 'გამოწერები' },
-    { key: 'loans' as const, label: 'გასესხებული' },
-    { key: 'stats' as const, label: 'სტატისტიკა' },
+  const tabsRow1 = [
+    { key: 'debts' as const, label: 'ვალები', icon: '💸' },
+    { key: 'bills' as const, label: 'გადასახადელები', icon: '📅' },
+    { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄' },
+  ];
+  const tabsRow2 = [
+    { key: 'loans' as const, label: 'გასესხებული', icon: '🤝' },
+    { key: 'stats' as const, label: 'სტატისტიკა', icon: '📊' },
   ];
 
   return (
@@ -495,21 +508,41 @@ export const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex text-xs font-bold border-b border-slate-700/50">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                'flex-1 py-2 px-1.5 transition-all duration-200 border-b-2',
-                activeTab === tab.key
-                  ? 'text-yellow-400 border-yellow-400 bg-yellow-400/5'
-                  : 'text-slate-400 border-transparent hover:text-slate-300 hover:bg-slate-800/50'
-              )}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="border-b border-slate-700/50">
+          <div className="flex text-xs font-bold">
+            {tabsRow1.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'flex-1 py-1.5 px-1 transition-all duration-200 border-b-2 flex items-center justify-center gap-1',
+                  activeTab === tab.key
+                    ? 'text-yellow-400 border-yellow-400 bg-yellow-400/5'
+                    : 'text-slate-400 border-transparent hover:text-slate-300 hover:bg-slate-800/50'
+                )}
+              >
+                <span className="text-[10px]">{tab.icon}</span>
+                <span className="text-[11px]">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex text-xs font-bold">
+            {tabsRow2.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'flex-1 py-1.5 px-1 transition-all duration-200 border-b-2 flex items-center justify-center gap-1',
+                  activeTab === tab.key
+                    ? 'text-yellow-400 border-yellow-400 bg-yellow-400/5'
+                    : 'text-slate-400 border-transparent hover:text-slate-300 hover:bg-slate-800/50'
+                )}
+              >
+                <span className="text-[10px]">{tab.icon}</span>
+                <span className="text-[11px]">{tab.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-3">

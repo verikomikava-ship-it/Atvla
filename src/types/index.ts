@@ -21,6 +21,7 @@ export type ExpenseSubcategory =
   | 'სპორტი'
   | 'შინაური ცხოველი'
   | 'ვალის გადახდა'
+  | 'ყოველთვიური გადასახადი'
   | 'სხვა';
 
 export type SubcategoryInfo = {
@@ -50,6 +51,7 @@ export const SUBCATEGORIES: Record<ExpenseSubcategory, SubcategoryInfo> = {
   'სპორტი':          { label: 'სპორტი',               icon: '🏋️', defaultCategory: 'სურვილი' },
   'შინაური ცხოველი':  { label: 'შინაური ცხოველი',       icon: '🐾', defaultCategory: 'საჭირო' },
   'ვალის გადახდა':   { label: 'ვალის გადახდა',         icon: '💸', defaultCategory: 'აუცილებელი' },
+  'ყოველთვიური გადასახადი': { label: 'ყოველთვიური გადასახადი', icon: '📅', defaultCategory: 'აუცილებელი' },
   'სხვა':            { label: 'სხვა',                 icon: '📝', defaultCategory: 'საჭირო' },
 };
 
@@ -62,6 +64,7 @@ export type Expense = {
   category: ExpenseCategory;
   subcategory?: ExpenseSubcategory;
   debtId?: number; // ვალის გადახდისთვის - რომელ ვალს ეხება
+  billId?: number; // ყოველთვიური გადასახადისთვის - რომელ ბილს ეხება
 };
 
 export type DayData = {

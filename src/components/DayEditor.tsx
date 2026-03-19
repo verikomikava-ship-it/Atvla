@@ -57,7 +57,7 @@ const migrateDayData = (data: DayData): DayData => {
 interface DayEditorProps {
   date: string | null;
   state: AppState;
-  onSave: (date: string, data: DayData, debtPayments?: { debtId: number; amount: number }[]) => void;
+  onSave: (date: string, data: DayData, debtPayments?: { debtId: number; amount: number }[], billPayments?: { billId: number; paid: boolean }[]) => void;
   onClose: () => void;
 }
 
@@ -74,6 +74,10 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
 
   // აქტიური ვალები (ვალის გადახდის subcategory-სთვის)
   const activeDebts = state.debts.filter((d) => !d.paid);
+
+  // გადაუხდელი ბილები ამ თვისთვის (ყოველთვიური გადასახადი subcategory-სთვის)
+  const currentBillMonth = date ? new Date(date + 'T00:00:00').getMonth() : new Date().getMonth();
+  const unpaidBills = state.bills.filter((b) => !b.paid && (b.reset_month ?? 0) === currentBillMonth);
 
   // Escape-ით დახურვა
   useEffect(() => {
@@ -128,6 +132,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
               name: info.label,
               category: info.defaultCategory,
               debtId: subcategory === 'ვალის გადახდა' ? e.debtId : undefined,
+              billId: subcategory === 'ყოველთვიური გადასახადი' ? e.billId : undefined,
             }
           : e
       ),
@@ -142,6 +147,19 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
       expenses: prev.expenses.map((e) =>
         e.id === expenseId
           ? { ...e, debtId, name: `ვალი: ${debt.name}` }
+          : e
+      ),
+    }));
+  };
+
+  const updateExpenseBill = (expenseId: number, billId: number) => {
+    const bill = unpaidBills.find((b) => b.id === billId);
+    if (!bill) return;
+    setFormData((prev) => ({
+      ...prev,
+      expenses: prev.expenses.map((e) =>
+        e.id === expenseId
+          ? { ...e, billId, name: `გადასახადი: ${bill.name}`, amount: bill.amount }
           : e
       ),
     }));
@@ -194,7 +212,36 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
           }
         });
 
-      onSave(date, cleanedData, debtPayments.length > 0 ? debtPayments : undefined);
+      // ბილის გადახდები
+      const billPayments: { billId: number; paid: boolean }[] = [];
+
+      // ახალი ბილის გადახდები
+      cleanedExpenses
+        .filter((e) => e.subcategory === 'ყოველთვიური გადასახადი' && e.billId && e.amount > 0)
+        .forEach((e) => {
+          const prevExpense = previousExpenses.find((pe) => pe.id === e.id);
+          const wasBillPayment = prevExpense?.subcategory === 'ყოველთვიური გადასახადი' && prevExpense?.billId === e.billId;
+          if (!wasBillPayment) {
+            billPayments.push({ billId: e.billId!, paid: true });
+          }
+        });
+
+      // წაშლილი ბილის გადახდები — unpaid-ზე დაბრუნება
+      previousExpenses
+        .filter((pe) => pe.subcategory === 'ყოველთვიური გადასახადი' && pe.billId && pe.amount > 0)
+        .forEach((pe) => {
+          const stillExists = cleanedExpenses.find((e) => e.id === pe.id && e.billId === pe.billId);
+          if (!stillExists) {
+            billPayments.push({ billId: pe.billId!, paid: false });
+          }
+        });
+
+      onSave(
+        date,
+        cleanedData,
+        debtPayments.length > 0 ? debtPayments : undefined,
+        billPayments.length > 0 ? billPayments : undefined
+      );
     }
   };
 
@@ -562,6 +609,51 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                   )}
                   {expense.subcategory === 'ვალის გადახდა' && activeDebts.length === 0 && (
                     <p className="ml-6 text-[9px] text-muted-foreground">აქტიური ვალები არ არის</p>
+                  )}
+                  {expense.subcategory === 'ყოველთვიური გადასახადი' && unpaidBills.length > 0 && (
+                    <div className="ml-6 space-y-1">
+                      <select
+                        value={expense.billId || ''}
+                        onChange={(e) => updateExpenseBill(expense.id, +e.target.value)}
+                        className={cn(
+                          'w-full h-6 text-[10px] pl-2 pr-1 rounded-md border bg-background appearance-none cursor-pointer',
+                          'border-blue-700/50 focus:outline-none focus:ring-1 focus:ring-blue-500',
+                          'text-blue-200'
+                        )}
+                      >
+                        <option value="">აირჩიე გადასახადი...</option>
+                        {unpaidBills.map((bill) => (
+                          <option key={bill.id} value={bill.id}>
+                            📅 {bill.name} — {bill.amount}₾
+                            {bill.dueDate ? ` (ვადა: ${bill.dueDate})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {expense.billId && (() => {
+                        const linkedBill = unpaidBills.find((b) => b.id === expense.billId);
+                        if (!linkedBill) return null;
+                        return (
+                          <div className="flex items-center gap-2 text-[9px] px-1">
+                            <span className="text-blue-300">
+                              {linkedBill.name}: {linkedBill.amount}₾
+                            </span>
+                            {linkedBill.dueDate && (
+                              <span className="text-amber-400">
+                                ვადა: {linkedBill.dueDate}
+                              </span>
+                            )}
+                            {expense.amount > 0 && (
+                              <span className="text-green-400 font-bold">
+                                → გადახდილი!
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                  {expense.subcategory === 'ყოველთვიური გადასახადი' && unpaidBills.length === 0 && (
+                    <p className="ml-6 text-[9px] text-muted-foreground">ამ თვეში გადაუხდელი ბილები არ არის</p>
                   )}
                 </div>
               ))}
