@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AppState, DayData, Expense, ExpenseCategory, ExpenseSubcategory, SUBCATEGORIES, SUBCATEGORY_LIST, UtilityType, UTILITY_TYPES } from '../types';
+import { AppState, DayData, Expense, ExpenseCategory, ExpenseSubcategory, SUBCATEGORIES, SUBCATEGORY_LIST, UtilityType, UTILITY_TYPES, EXTRA_INCOME_SOURCES } from '../types';
 import { calculateBalance, getExpensesTotal, getDailyTargetForDate, getAverageDailyExpenses, calculateDebtRepaymentPlan } from '../utils/calculations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -346,10 +346,34 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
       className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
       onClick={handleBackdropClick}
     >
+      <div className="flex gap-3 max-w-[900px] w-full max-h-[90vh] animate-fadeIn" onKeyDown={handleKeyDown}>
+      {/* მარცხენა პანელი — დღიური */}
+      <Card className="hidden md:flex flex-col w-[400px] border-amber-800/40 shadow-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #1c1a15 0%, #1f1d17 100%)' }}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-amber-800/30" style={{ background: 'linear-gradient(90deg, #2a2520, #1f1d17)' }}>
+          <BookOpen className="h-4 w-4 text-amber-500" />
+          <p className="text-sm font-bold text-amber-400">დღიური</p>
+          <span className="text-xs text-amber-600 ml-auto">{displayDate}</span>
+        </div>
+        <div className="flex-1 relative overflow-y-auto">
+          <div className="absolute left-8 top-0 bottom-0 w-px bg-amber-800/15" />
+          <textarea
+            placeholder="რა მოხდა დღეს... &#10;&#10;ჩაწერე აზრები, მოვლენები, გეგმები..."
+            value={formData.comment}
+            onChange={(e) => handleChange('comment', e.target.value)}
+            className="w-full h-full min-h-[300px] p-4 pl-12 text-sm text-amber-100/90 placeholder-amber-800/40 resize-none focus:outline-none"
+            style={{
+              background: 'transparent',
+              lineHeight: '2',
+              backgroundImage: 'repeating-linear-gradient(transparent, transparent 31px, rgba(180,140,80,0.06) 31px, rgba(180,140,80,0.06) 32px)',
+            }}
+          />
+        </div>
+      </Card>
+
+      {/* მარჯვენა პანელი — ფინანსური */}
       <Card
         ref={modalRef}
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto animate-fadeIn border-amber-600/50 bg-gradient-to-br from-slate-900 to-[#1e293b] shadow-2xl"
-        onKeyDown={handleKeyDown}
+        className="w-full md:w-[480px] max-h-[90vh] overflow-y-auto border-amber-600/50 bg-gradient-to-br from-slate-900 to-[#1e293b] shadow-2xl"
       >
         {/* ჰედერი */}
         <CardHeader className="sticky top-0 z-10 bg-gradient-to-r from-slate-900 to-[#1e293b] border-b border-amber-600/30 flex-row items-center justify-between space-y-0 px-3 py-2">
@@ -398,21 +422,60 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="space-y-1.5">
               <Input
                 type="text" inputMode="numeric"
-                placeholder="ძირითადი"
+                placeholder="ძირითადი შემოსავალი"
                 value={formData.incMain || ''}
                 onChange={(e) => handleChange('incMain', +e.target.value)}
                 className="h-8 text-sm"
               />
-              <Input
-                type="text" inputMode="numeric"
-                placeholder="დამატებითი"
-                value={formData.incExtra || ''}
-                onChange={(e) => handleChange('incExtra', +e.target.value)}
-                className="h-8 text-sm"
-              />
+              <div className="space-y-1">
+                <div className="flex gap-1.5">
+                  <Input
+                    type="text" inputMode="numeric"
+                    placeholder="დამატებითი"
+                    value={formData.incExtra || ''}
+                    onChange={(e) => handleChange('incExtra', +e.target.value)}
+                    className="h-8 text-sm flex-1"
+                  />
+                </div>
+                {(formData.incExtra || 0) > 0 && (
+                  <div className="space-y-1 animate-fadeIn">
+                    <div className="flex flex-wrap gap-1">
+                      {EXTRA_INCOME_SOURCES.map((src) => (
+                        <button
+                          key={src.key}
+                          type="button"
+                          onClick={() => handleChange('incExtraSource' as keyof DayData, src.key)}
+                          className={cn(
+                            'px-1.5 py-0.5 rounded-full text-[9px] font-bold border transition-all',
+                            formData.incExtraSource === src.key
+                              ? 'scale-105'
+                              : 'opacity-50 hover:opacity-100'
+                          )}
+                          style={{
+                            borderColor: src.color,
+                            color: src.color,
+                            backgroundColor: formData.incExtraSource === src.key ? `${src.color}20` : 'transparent',
+                          }}
+                        >
+                          {src.icon} {src.label}
+                        </button>
+                      ))}
+                    </div>
+                    {formData.incExtraSource === 'სხვა' && (
+                      <Input
+                        type="text"
+                        placeholder="საიდან მიიღე?"
+                        value={formData.incExtraNote || ''}
+                        onChange={(e) => handleChange('incExtraNote' as keyof DayData, e.target.value)}
+                        className="h-6 text-[10px]"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -761,8 +824,8 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
             </div>
           </div>
 
-          {/* დღიური */}
-          <div className="rounded-lg overflow-hidden border border-amber-800/40" style={{ background: 'linear-gradient(135deg, #1c1a15 0%, #1f1d17 100%)' }}>
+          {/* დღიური — მობილურზე */}
+          <div className="md:hidden rounded-lg overflow-hidden border border-amber-800/40" style={{ background: 'linear-gradient(135deg, #1c1a15 0%, #1f1d17 100%)' }}>
             <div className="px-2.5 py-1 flex items-center gap-1.5 border-b border-amber-800/30" style={{ background: 'linear-gradient(90deg, #2a2520, #1f1d17)' }}>
               <BookOpen className="h-3 w-3 text-amber-500" />
               <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">დღიური</p>
@@ -829,6 +892,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 };

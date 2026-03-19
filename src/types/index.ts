@@ -81,9 +81,24 @@ export type Expense = {
   utilityCustomName?: string; // თუ 'სხვა' აირჩია
 };
 
+// დამატებითი შემოსავლის წყარო
+export type ExtraIncomeSource = 'გზავნილი' | 'საჩუქარი' | 'ბონუსი' | 'დამატებითი სამუშაო' | 'გაყიდვა' | 'პროცენტი' | 'სხვა';
+
+export const EXTRA_INCOME_SOURCES: { key: ExtraIncomeSource; label: string; icon: string; color: string }[] = [
+  { key: 'გზავნილი', label: 'გზავნილი', icon: '💳', color: '#3b82f6' },
+  { key: 'საჩუქარი', label: 'საჩუქარი', icon: '🎁', color: '#ec4899' },
+  { key: 'ბონუსი', label: 'ბონუსი', icon: '🌟', color: '#f59e0b' },
+  { key: 'დამატებითი სამუშაო', label: 'დამატ. სამუშაო', icon: '💼', color: '#10b981' },
+  { key: 'გაყიდვა', label: 'გაყიდვა', icon: '🏷️', color: '#8b5cf6' },
+  { key: 'პროცენტი', label: 'პროცენტი', icon: '📈', color: '#06b6d4' },
+  { key: 'სხვა', label: 'სხვა', icon: '📝', color: '#64748b' },
+];
+
 export type DayData = {
   incMain: number;
   incExtra: number;
+  incExtraSource?: ExtraIncomeSource; // დამატებითი შემოსავლის წყარო
+  incExtraNote?: string; // დამატებითი შემოსავლის კომენტარი
   expenses: Expense[];
   debt_exp: number;
   kulaba: number;
