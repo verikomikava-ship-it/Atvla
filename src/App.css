@@ -1,0 +1,133 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 213 31% 91%;
+    --card: 222 47% 9%;
+    --card-foreground: 213 31% 91%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 213 31% 91%;
+    --primary: 38 92% 50%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 213 31% 91%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 217 33% 20%;
+    --accent-foreground: 213 31% 91%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 217 33% 18%;
+    --input: 217 33% 18%;
+    --ring: 38 92% 50%;
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Day Card Styles */
+.day-card {
+  @apply transition-all border border-border rounded-md flex flex-col items-center justify-center cursor-pointer;
+  height: 68px;
+  background: hsl(var(--card));
+}
+
+.day-card:hover {
+  @apply border-primary shadow-lg;
+  transform: scale(1.05);
+  box-shadow: 0 0 16px hsla(var(--primary), 0.2);
+}
+
+/* Day Status Colors */
+.status-perfect {
+  background: linear-gradient(135deg, hsl(160 84% 39%) 0%, hsl(160 84% 30%) 100%);
+  border-color: hsl(160 84% 39%);
+}
+
+.status-critical {
+  background: linear-gradient(135deg, hsl(0 84% 60%) 0%, hsl(0 84% 50%) 100%);
+  border-color: hsl(0 84% 60%);
+}
+
+.status-yellow {
+  background: linear-gradient(135deg, hsl(38 92% 50%) 0%, hsl(38 92% 42%) 100%);
+  border-color: hsl(38 92% 50%);
+}
+
+.status-green-red {
+  background: linear-gradient(to right, hsl(160 84% 39%) 50%, hsl(0 84% 60%) 50%);
+}
+
+.status-yellow-red {
+  background: linear-gradient(to right, hsl(38 92% 50%) 50%, hsl(0 84% 60%) 50%);
+}
+
+.status-yellow-green {
+  background: linear-gradient(to right, hsl(38 92% 50%) 50%, hsl(160 84% 39%) 50%);
+}
+
+.status-green-green {
+  background: linear-gradient(to right, hsl(160 84% 39%) 50%, hsl(142 71% 45%) 50%);
+}
+
+.status-red-green {
+  background: linear-gradient(135deg, hsl(0 84% 60%) 50%, hsl(160 84% 39%) 50%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Animations */
+.animate-fadeIn {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .day-card {
+    height: 60px;
+  }
+}
+
+@media (max-width: 768px) {
+  .day-card {
+    height: 54px;
+  }
+}
