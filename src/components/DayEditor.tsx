@@ -249,9 +249,13 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
       cleanedExpenses
         .filter((e) => e.subcategory === 'კომუნალური' && e.utilityType && e.amount > 0)
         .forEach((e) => {
-          const utilName = `კომუნალური: ${e.utilityType}`;
+          const utilLabel = e.utilityType;
           const matchingBill = state.bills.find(
-            (b) => b.name === utilName && !billPayments.some((bp) => bp.billId === b.id)
+            (b) =>
+              !billPayments.some((bp) => bp.billId === b.id) &&
+              (b.name === `კომუნალური: ${utilLabel}` ||
+               b.name === utilLabel ||
+               b.name.includes(utilLabel!))
           );
           if (matchingBill) {
             billPayments.push({ billId: matchingBill.id, paid: true });
@@ -266,9 +270,15 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
             (e) => e.subcategory === 'კომუნალური' && e.utilityType === pe.utilityType && e.amount > 0
           );
           if (!stillExists) {
-            const utilName = `კომუნალური: ${pe.utilityType}`;
-            const matchingBill = state.bills.find((b) => b.name === utilName);
-            if (matchingBill && !billPayments.some((bp) => bp.billId === matchingBill.id)) {
+            const utilLabel = pe.utilityType;
+            const matchingBill = state.bills.find(
+              (b) =>
+                !billPayments.some((bp) => bp.billId === b.id) &&
+                (b.name === `კომუნალური: ${utilLabel}` ||
+                 b.name === utilLabel ||
+                 b.name.includes(utilLabel!))
+            );
+            if (matchingBill) {
               billPayments.push({ billId: matchingBill.id, paid: false });
             }
           }
