@@ -245,6 +245,35 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
           }
         });
 
+      // კომუნალურის გადახდები — ავტომატურად ბილის მონიშვნა
+      cleanedExpenses
+        .filter((e) => e.subcategory === 'კომუნალური' && e.utilityType && e.amount > 0)
+        .forEach((e) => {
+          const utilName = `კომუნალური: ${e.utilityType}`;
+          const matchingBill = state.bills.find(
+            (b) => b.name === utilName && !billPayments.some((bp) => bp.billId === b.id)
+          );
+          if (matchingBill) {
+            billPayments.push({ billId: matchingBill.id, paid: true });
+          }
+        });
+
+      // წაშლილი კომუნალურის გადახდები — unpaid-ზე დაბრუნება
+      previousExpenses
+        .filter((pe) => pe.subcategory === 'კომუნალური' && pe.utilityType && pe.amount > 0)
+        .forEach((pe) => {
+          const stillExists = cleanedExpenses.find(
+            (e) => e.subcategory === 'კომუნალური' && e.utilityType === pe.utilityType && e.amount > 0
+          );
+          if (!stillExists) {
+            const utilName = `კომუნალური: ${pe.utilityType}`;
+            const matchingBill = state.bills.find((b) => b.name === utilName);
+            if (matchingBill && !billPayments.some((bp) => bp.billId === matchingBill.id)) {
+              billPayments.push({ billId: matchingBill.id, paid: false });
+            }
+          }
+        });
+
       // წაშლილი ბილის გადახდები — unpaid-ზე დაბრუნება
       previousExpenses
         .filter((pe) => pe.subcategory === 'ყოველთვიური გადასახადი' && pe.billId && pe.amount > 0)
