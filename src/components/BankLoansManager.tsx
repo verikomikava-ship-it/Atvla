@@ -74,6 +74,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     const numPrincipal = parseInt(principal) || 0;
     const numInterest = parseInt(monthlyInterest) || 0;
     const numPayDay = parseInt(paymentDay) || 0;
+    if (selectedType === 'სხვა' && !customName.trim()) { alert('შეიყვანე სესხის სახელი'); return; }
     if (numPrincipal <= 0) { alert('შეიყვანე სწორი ძირი თანხა'); return; }
     if (numInterest <= 0) { alert('შეიყვანე სწორი პროცენტის თანხა'); return; }
     if (numPayDay < 1 || numPayDay > 31) { alert('შეიყვანე გადახდის დღე (1-31)'); return; }
@@ -328,7 +329,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
       {/* ფორმა — ტიპი არჩეულია */}
       {selectedType && (
         <div className="space-y-1.5 animate-fadeIn">
-          <Input type="text" placeholder="დამატებითი სახელი (არასავალდ.)" value={customName} onChange={(e) => setCustomName(e.target.value)} className={COMPACT_INPUT} />
+          <Input type="text" placeholder={selectedType === 'სხვა' ? 'სესხის სახელი *' : 'დამატებითი სახელი (არასავალდ.)'} value={customName} onChange={(e) => setCustomName(e.target.value)} className={COMPACT_INPUT} autoFocus={selectedType === 'სხვა'} />
 
           <div className="flex gap-1.5">
             <Input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={principal} onChange={(e) => setPrincipal(e.target.value)} className={cn('flex-1', COMPACT_INPUT)} />

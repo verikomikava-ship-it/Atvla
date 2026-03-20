@@ -271,6 +271,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   // ბანკის ფუნქციები
   const addBankItem = () => {
     if (!bankType) { alert('აირჩიე პროდუქტის ტიპი'); return; }
+    if (bankType === 'სხვა' && !bankName.trim()) { alert('შეიყვანე სესხის სახელი'); return; }
     const pr = parseInt(bankPrincipal) || 0;
     const interest = parseInt(bankInterest) || 0;
     const day = parseInt(bankPayDay) || 0;
@@ -942,7 +943,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
               {/* ფორმა */}
               {bankType && (
                 <div className="space-y-2 animate-fadeIn">
-                  <Input type="text" placeholder="დამატებითი სახელი (არასავალდ.)" value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-sm" />
+                  <Input type="text" placeholder={bankType === 'სხვა' ? 'სესხის სახელი *' : 'დამატებითი სახელი (არასავალდ.)'} value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-sm" autoFocus={bankType === 'სხვა'} />
                   <div className="flex gap-2">
                     <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={bankPrincipal}
                       onChange={(e) => setBankPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
