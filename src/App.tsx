@@ -15,6 +15,7 @@ import { LoansManager } from '@/components/LoansManager';
 import { LombardsManager } from '@/components/LombardsManager';
 import { BankLoansManager } from '@/components/BankLoansManager';
 import { StatsView } from '@/components/StatsView';
+import { UtilitiesManager } from '@/components/UtilitiesManager';
 import { ToolsMenu } from '@/components/ToolsMenu';
 import { DiaryView } from '@/components/DiaryView';
 import { SetupWizard } from '@/components/SetupWizard';
@@ -40,7 +41,7 @@ export const App: React.FC = () => {
   } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
-  const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'subscriptions' | 'loans' | 'lombards' | 'bank' | 'stats'>('debts');
+  const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'utilities' | 'subscriptions' | 'loans' | 'lombards' | 'bank' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
 
@@ -733,7 +734,8 @@ export const App: React.FC = () => {
 
   const tabsRow1 = [
     { key: 'debts' as const, label: 'ვალები', icon: '💸' },
-    { key: 'bills' as const, label: 'ყოველთვიური გადასახადი', icon: '📅' },
+    { key: 'bills' as const, label: 'ყოველთვიური', icon: '📅' },
+    { key: 'utilities' as const, label: 'კომუნალურები', icon: '⚡' },
     { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄' },
   ];
   const tabsRow2 = [
@@ -875,6 +877,14 @@ export const App: React.FC = () => {
               onRemoveBill={handleRemoveBill}
               onToggleBillPaid={handleToggleBillPaid}
               onEditBill={handleEditBill}
+            />
+          )}
+
+          {activeTab === 'utilities' && (
+            <UtilitiesManager
+              state={state}
+              selectedMonth={selectedMonth}
+              onToggleBillPaid={handleToggleBillPaid}
             />
           )}
 

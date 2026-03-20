@@ -11,9 +11,7 @@ import { Briefcase, Rocket, Layers, ArrowLeft, ArrowRight, Plus, X, Check, Calen
 
 // ყოველთვიური გადასახადის კატეგორიები (სესხი ამოიღო — ცალკე "ბანკი" step-ში გადავიდა)
 const BILL_CATEGORIES = [
-  { key: 'კომუნალური', label: 'კომუნალური', icon: '🏠', color: '#14b8a6', hasSubTypes: true },
   { key: 'ქირა', label: 'ქირა', icon: '🏢', color: '#8b5cf6' },
-  { key: 'ინტერნეტი', label: 'ინტერნეტი', icon: '🌐', color: '#3b82f6' },
   { key: 'დაზღვევა', label: 'დაზღვევა', icon: '🛡️', color: '#f59e0b' },
   { key: 'ტელეფონი', label: 'ტელეფონი', icon: '📱', color: '#06b6d4' },
   { key: 'გამოწერები', label: 'გამოწერები', icon: '🔄', color: '#a855f7' },
@@ -82,8 +80,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   const [newBillAmount, setNewBillAmount] = useState('');
   const [newBillDueDay, setNewBillDueDay] = useState('');
   const [selectedBillCategory, setSelectedBillCategory] = useState<string | null>(null);
-  const [selectedUtilityType, setSelectedUtilityType] = useState<string | null>(null);
-  const [customBillName, setCustomBillName] = useState('');
+  // კომუნალურების state (ცალკე ნაბიჯი)
+  const [utilityAmounts, setUtilityAmounts] = useState<Record<string, string>>({});
   const [newAiName, setNewAiName] = useState('');
   const [newAiAmount, setNewAiAmount] = useState('');
   const [newAiFrequency, setNewAiFrequency] = useState<'monthly' | 'weekly' | 'daily'>('monthly');
@@ -138,7 +136,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
     acc[b.name] = b.amount;
     return acc;
   }, {});
-  const monthlyBillsTotal = Object.values(uniqueBills).reduce((sum, amount) => sum + amount, 0);
+  // კომუნალურების ჯამი
+  const utilityTotal = Object.entries(utilityAmounts).reduce((sum, [, val]) => sum + (parseInt(val) || 0), 0);
+  const monthlyBillsTotal = Object.values(uniqueBills).reduce((sum, amount) => sum + amount, 0) + utilityTotal;
 
   // სამუშაო დღეები ამ თვეში
   const now = new Date();
@@ -245,25 +245,16 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
     setNewBillAmount('');
     setNewBillDueDay('');
     setSelectedBillCategory(null);
-    setSelectedUtilityType(null);
-    setCustomBillName('');
   };
 
   const selectBillCategory = (key: string) => {
     setSelectedBillCategory(key);
-    setSelectedUtilityType(null);
     const cat = BILL_CATEGORIES.find((c) => c.key === key);
-    if (cat && key !== 'კომუნალური' && key !== 'სხვა') {
+    if (cat && key !== 'სხვა') {
       setNewBillName(cat.label);
     } else if (key === 'სხვა') {
       setNewBillName('');
     }
-  };
-
-  const selectUtilitySubType = (utilKey: string) => {
-    setSelectedUtilityType(utilKey);
-    const util = UTILITY_TYPES.find((u) => u.key === utilKey);
-    setNewBillName(`კომუნალური: ${util?.label || utilKey}`);
   };
 
   const removeBillGroup = (name: string) => {
@@ -330,11 +321,32 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
       setupCompleted: true,
     };
 
+    // კომუნალურების ბილების გენერაცია
+    const utilityBills: Bill[] = [];
+    const currentYear = new Date().getFullYear();
+    Object.entries(utilityAmounts).forEach(([utilKey, amountStr]) => {
+      const amount = parseInt(amountStr) || 0;
+      if (amount <= 0) return;
+      const util = UTILITY_TYPES.find((u) => u.key === utilKey);
+      if (!util) return;
+      const ts = Date.now() + utilityBills.length * 100;
+      for (let month = 0; month < 12; month++) {
+        utilityBills.push({
+          id: ts + month,
+          name: `კომუნალური: ${util.label}`,
+          amount,
+          date: '',
+          paid: false,
+          reset_month: month,
+          isRecurring: true,
+        });
+      }
+    });
+
     // ლობარდების გენერაცია: debts + bills + lombard records
     const setupDebts: Debt[] = [];
     const setupLombards: Lombard[] = [];
     const lombardBills: Bill[] = [];
-    const currentYear = new Date().getFullYear();
     const today = new Date().toISOString().split('T')[0];
 
     lombardItems.forEach((item, idx) => {
@@ -442,7 +454,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
       });
     });
 
-    onComplete(finalProfile, [...bills, ...lombardBills], setupDebts, setupLombards, setupBankLoans);
+    onComplete(finalProfile, [...bills, ...utilityBills, ...lombardBills], setupDebts, setupLombards, setupBankLoans);
   };
 
   // ინსტალაციის გამოტოვება — default პროფილით
@@ -940,7 +952,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
               {Object.keys(uniqueBills).length > 0 && (
                 <div className="space-y-1.5">
                   {Object.entries(uniqueBills).map(([name, amount]) => {
-                    const cat = BILL_CATEGORIES.find((c) => name.startsWith(c.label) || name.startsWith('კომუნალური'));
+                    const cat = BILL_CATEGORIES.find((c) => name.startsWith(c.label));
                     const color = cat?.color || '#64748b';
                     return (
                       <div key={name} className="flex justify-between items-center p-2.5 rounded-xl border" style={{ borderColor: `${color}40`, backgroundColor: `${color}08` }}>
@@ -993,48 +1005,6 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                 </div>
               </div>
 
-              {/* კომუნალურის საბ-ტიპები */}
-              {selectedBillCategory === 'კომუნალური' && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">რა კომუნალური?</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {UTILITY_TYPES.map((util) => (
-                      <button
-                        key={util.key}
-                        type="button"
-                        onClick={() => selectUtilitySubType(util.key)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-full text-xs font-bold border-2 transition-all',
-                          selectedUtilityType === util.key
-                            ? 'scale-105'
-                            : 'opacity-60 hover:opacity-100'
-                        )}
-                        style={{
-                          borderColor: util.color,
-                          color: util.color,
-                          backgroundColor: selectedUtilityType === util.key ? `${util.color}20` : 'transparent',
-                          boxShadow: selectedUtilityType === util.key ? `0 0 10px ${util.color}25` : 'none',
-                        }}
-                      >
-                        {util.icon} {util.label}
-                      </button>
-                    ))}
-                  </div>
-                  {selectedUtilityType === 'სხვა' && (
-                    <Input
-                      type="text"
-                      placeholder="რა კომუნალურია?"
-                      value={customBillName}
-                      onChange={(e) => {
-                        setCustomBillName(e.target.value);
-                        setNewBillName(`კომუნალური: ${e.target.value || 'სხვა'}`);
-                      }}
-                      className="h-9 text-sm"
-                    />
-                  )}
-                </div>
-              )}
-
               {/* სხვა — ხელით სახელი */}
               {selectedBillCategory === 'სხვა' && (
                 <Input
@@ -1048,7 +1018,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
               )}
 
               {/* თანხა და გადახდის დღე */}
-              {selectedBillCategory && (selectedBillCategory !== 'კომუნალური' || selectedUtilityType) && (
+              {selectedBillCategory && (
                 <div className="space-y-2 animate-fadeIn">
                   <div className="flex gap-2">
                     <input
@@ -1098,113 +1068,79 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
           </Card>
         )}
 
-        {/* Step 4: ბანკი */}
+        {/* Step 4: კომუნალურები */}
         {step === 4 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
               <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 4/6</Badge>
-              <CardTitle className="text-2xl font-black flex items-center justify-center gap-2">
-                <Landmark className="w-6 h-6" /> ბანკი
-              </CardTitle>
-              <CardDescription>გაქვს სესხი, განვადება ან საკრედიტო ბარათი?</CardDescription>
+              <CardTitle className="text-2xl font-black">კომუნალურები ⚡</CardTitle>
+              <CardDescription>საშუალოდ რამდენს იხდი თვეში?</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* დამატებული ბანკის პროდუქტები */}
-              {bankItems.length > 0 && (
-                <div className="space-y-1.5">
-                  {bankItems.map((item, idx) => {
-                    const typeInfo = BANK_PRODUCT_TYPES.find((t) => t.key === item.type);
-                    const months = bankMonthsBetween(item.startDate, item.endDate);
-                    return (
-                      <div key={idx} className="flex justify-between items-center p-2.5 rounded-xl border" style={{ borderColor: `${typeInfo?.color}40`, backgroundColor: `${typeInfo?.color}08` }}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">{typeInfo?.icon}</span>
-                          <div>
-                            <span className="font-bold text-sm" style={{ color: typeInfo?.color }}>{typeInfo?.label}</span>
-                            {item.name && <span className="text-[10px] text-muted-foreground ml-1">· {item.name}</span>}
-                            <div className="text-[10px] text-muted-foreground">
-                              ძირი: <span className="text-red-600 dark:text-red-400 font-bold">{item.principal}₾</span>
-                              {' · '}%/თვე: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
-                              {' · '}{months} თვე
-                            </div>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeBankItem(idx)}>
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* ტიპის არჩევა */}
-              <div>
-                <p className="text-xs text-muted-foreground mb-2">აირჩიე ტიპი:</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {BANK_PRODUCT_TYPES.map((type) => (
-                    <button
-                      key={type.key}
-                      type="button"
-                      onClick={() => setBankType(bankType === type.key ? null : type.key)}
-                      className={cn(
-                        'flex items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all text-left',
-                        bankType === type.key ? 'scale-[1.02]' : 'border-border/50 opacity-60 hover:opacity-100'
+              <div className="space-y-3">
+                {UTILITY_TYPES.map((util) => {
+                  const isSelected = utilityAmounts[util.key] !== undefined;
+                  return (
+                    <div key={util.key} className="space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUtilityAmounts((prev) => {
+                            const next = { ...prev };
+                            if (next[util.key] !== undefined) {
+                              delete next[util.key];
+                            } else {
+                              next[util.key] = '';
+                            }
+                            return next;
+                          });
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left',
+                          isSelected ? 'scale-[1.01]' : 'border-border/50 opacity-60 hover:opacity-100'
+                        )}
+                        style={{
+                          borderColor: isSelected ? util.color : undefined,
+                          backgroundColor: isSelected ? `${util.color}12` : undefined,
+                        }}
+                      >
+                        <span className="text-xl">{util.icon}</span>
+                        <span className="text-sm font-bold flex-1" style={{ color: isSelected ? util.color : undefined }}>
+                          {util.label}
+                        </span>
+                        {isSelected && (
+                          <Check className="w-4 h-4" style={{ color: util.color }} />
+                        )}
+                      </button>
+                      {isSelected && (
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={`${util.label} — საშუალო თანხა ₾`}
+                          value={utilityAmounts[util.key] || ''}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, '');
+                            setUtilityAmounts((prev) => ({ ...prev, [util.key]: val }));
+                          }}
+                          autoFocus
+                          className="w-full h-10 rounded-xl border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                          style={{ borderColor: `${util.color}60` }}
+                        />
                       )}
-                      style={{
-                        borderColor: bankType === type.key ? type.color : undefined,
-                        backgroundColor: bankType === type.key ? `${type.color}15` : undefined,
-                      }}
-                    >
-                      <span className="text-lg">{type.icon}</span>
-                      <span className="text-[10px] font-bold" style={{ color: bankType === type.key ? type.color : undefined }}>{type.label}</span>
-                    </button>
-                  ))}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {/* ფორმა */}
-              {bankType && (
-                <div className="space-y-2 animate-fadeIn">
-                  <Input type="text" placeholder={bankType === 'სხვა' ? 'სესხის სახელი *' : 'დამატებითი სახელი (არასავალდ.)'} value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-sm" autoFocus={bankType === 'სხვა'} />
-                  <div className="flex gap-2">
-                    <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={bankPrincipal}
-                      onChange={(e) => setBankPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                    />
-                    <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={bankInterest}
-                      onChange={(e) => setBankInterest(e.target.value.replace(/[^0-9]/g, ''))}
-                      className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                    />
-                  </div>
-                  <input type="text" inputMode="numeric" placeholder="გადახდის დღე (1-31) *" value={bankPayDay}
-                    onChange={(e) => setBankPayDay(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="w-full h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  />
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასაწყისი *</label>
-                      <Input type="month" value={bankStart} onChange={(e) => setBankStart(e.target.value)} className="h-9 text-sm" />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასასრული *</label>
-                      <Input type="month" value={bankEnd} onChange={(e) => setBankEnd(e.target.value)} className="h-9 text-sm" />
-                    </div>
-                  </div>
-                  {bankStart && bankEnd && bankStart <= bankEnd && (
-                    <p className="text-[10px] text-muted-foreground text-center">
-                      ვადა: <span className="font-bold text-slate-800 dark:text-slate-200">{bankMonthsBetween(bankStart, bankEnd)} თვე</span>
-                    </p>
-                  )}
-                  <Button onClick={addBankItem} className="w-full h-9" variant="default">
-                    <Plus className="w-4 h-4 mr-1.5" /> დამატება
-                  </Button>
+              {utilityTotal > 0 && (
+                <div className="bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-700/50 rounded-xl p-3 text-center">
+                  <p className="text-xs text-teal-600 dark:text-teal-400">სავარაუდო კომუნალური თვეში:</p>
+                  <p className="text-2xl font-black text-teal-700 dark:text-teal-300">{utilityTotal}₾</p>
                 </div>
               )}
 
-              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-700/50 rounded-xl p-2.5 text-[11px] text-blue-600 dark:text-blue-400 space-y-0.5">
-                <p>📌 ძირი თანხა ავტომატურად დაემატება <strong>ვალებში</strong> (კუბიკებით)</p>
-                <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong></p>
+              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-700/50 rounded-xl p-2.5 text-[11px] text-blue-600 dark:text-blue-400">
+                📌 კომუნალურები ცალკე ტაბში გამოჩნდება. კალენდრიდან გადახდისას ავტომატურად მოინიშნება.
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -1215,7 +1151,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   არ მაქვს
                 </Button>
                 <Button onClick={() => setStep(5)} className="flex-[2]">
-                  {bankItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
+                  {Object.keys(utilityAmounts).length === 0 ? 'გამოტოვება' : 'შემდეგი'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -1223,66 +1159,181 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
           </Card>
         )}
 
-        {/* Step 5: ლობარდი */}
+        {/* Step 5: ბანკები / მიკროსაფინანსო */}
         {step === 5 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
               <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 5/6</Badge>
-              <CardTitle className="text-2xl font-black">ლობარდი</CardTitle>
-              <CardDescription>გაქვს ლობარდში ჩადებული ნივთი? დაამატე აქ</CardDescription>
+              <CardTitle className="text-2xl font-black flex items-center justify-center gap-2">
+                <Landmark className="w-6 h-6" /> ბანკები / მიკროსაფინანსო
+              </CardTitle>
+              <CardDescription>სესხი, განვადება, საკრედიტო ბარათი ან ლობარდი?</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {lombardItems.length > 0 && (
-                <div className="space-y-1.5">
-                  {lombardItems.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-2.5 rounded-xl border border-amber-500/40 bg-amber-500/8">
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        <div>
-                          <span className="font-bold text-sm text-amber-700 dark:text-amber-300">{item.itemName}</span>
-                          {item.contractNumber && <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-1.5">#{item.contractNumber}</span>}
-                          <div className="text-[10px] text-muted-foreground">
-                            ძირი: <span className="text-red-600 dark:text-red-400 font-bold">{item.principal}₾</span>
-                            {' · '}%/თვე: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
-                            {' · '}გადახდა: <span className="text-blue-600 dark:text-blue-400">{item.paymentDay} რიცხვი</span>
+
+              {/* ===== ბანკის სექცია ===== */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-black flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                  🏦 საბანკო პროდუქტები
+                </h3>
+
+                {/* დამატებული ბანკის პროდუქტები */}
+                {bankItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    {bankItems.map((item, idx) => {
+                      const typeInfo = BANK_PRODUCT_TYPES.find((t) => t.key === item.type);
+                      const months = bankMonthsBetween(item.startDate, item.endDate);
+                      return (
+                        <div key={idx} className="flex justify-between items-center p-2.5 rounded-xl border" style={{ borderColor: `${typeInfo?.color}40`, backgroundColor: `${typeInfo?.color}08` }}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">{typeInfo?.icon}</span>
+                            <div>
+                              <span className="font-bold text-sm" style={{ color: typeInfo?.color }}>{typeInfo?.label}</span>
+                              {item.name && <span className="text-[10px] text-muted-foreground ml-1">· {item.name}</span>}
+                              <div className="text-[10px] text-muted-foreground">
+                                ძირი: <span className="text-red-600 dark:text-red-400 font-bold">{item.principal}₾</span>
+                                {' · '}%/თვე: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
+                                {' · '}{months} თვე
+                              </div>
+                            </div>
+                          </div>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeBankItem(idx)}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ტიპის არჩევა */}
+                <div>
+                  <p className="text-xs text-muted-foreground mb-2">აირჩიე ტიპი:</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {BANK_PRODUCT_TYPES.map((type) => (
+                      <button
+                        key={type.key}
+                        type="button"
+                        onClick={() => setBankType(bankType === type.key ? null : type.key)}
+                        className={cn(
+                          'flex items-center gap-1.5 p-2.5 rounded-xl border-2 transition-all text-left',
+                          bankType === type.key ? 'scale-[1.02]' : 'border-border/50 opacity-60 hover:opacity-100'
+                        )}
+                        style={{
+                          borderColor: bankType === type.key ? type.color : undefined,
+                          backgroundColor: bankType === type.key ? `${type.color}15` : undefined,
+                        }}
+                      >
+                        <span className="text-lg">{type.icon}</span>
+                        <span className="text-[10px] font-bold" style={{ color: bankType === type.key ? type.color : undefined }}>{type.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ბანკის ფორმა */}
+                {bankType && (
+                  <div className="space-y-2 animate-fadeIn">
+                    <Input type="text" placeholder={bankType === 'სხვა' ? 'სესხის სახელი *' : 'დამატებითი სახელი (არასავალდ.)'} value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-sm" autoFocus={bankType === 'სხვა'} />
+                    <div className="flex gap-2">
+                      <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={bankPrincipal}
+                        onChange={(e) => setBankPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                      />
+                      <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={bankInterest}
+                        onChange={(e) => setBankInterest(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                      />
+                    </div>
+                    <input type="text" inputMode="numeric" placeholder="გადახდის დღე (1-31) *" value={bankPayDay}
+                      onChange={(e) => setBankPayDay(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="w-full h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასაწყისი *</label>
+                        <Input type="month" value={bankStart} onChange={(e) => setBankStart(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასასრული *</label>
+                        <Input type="month" value={bankEnd} onChange={(e) => setBankEnd(e.target.value)} className="h-9 text-sm" />
+                      </div>
+                    </div>
+                    {bankStart && bankEnd && bankStart <= bankEnd && (
+                      <p className="text-[10px] text-muted-foreground text-center">
+                        ვადა: <span className="font-bold text-slate-800 dark:text-slate-200">{bankMonthsBetween(bankStart, bankEnd)} თვე</span>
+                      </p>
+                    )}
+                    <Button onClick={addBankItem} className="w-full h-9" variant="default">
+                      <Plus className="w-4 h-4 mr-1.5" /> დამატება
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* ===== გამყოფი ===== */}
+              <div className="border-t border-border" />
+
+              {/* ===== ლობარდის სექცია ===== */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-black flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
+                  🏪 ლობარდი / მიკროსაფინანსო
+                </h3>
+
+                {lombardItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    {lombardItems.map((item, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-2.5 rounded-xl border border-amber-500/40 bg-amber-500/8">
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <div>
+                            <span className="font-bold text-sm text-amber-700 dark:text-amber-300">{item.itemName}</span>
+                            {item.contractNumber && <span className="text-[10px] text-amber-600 dark:text-amber-400 ml-1.5">#{item.contractNumber}</span>}
+                            <div className="text-[10px] text-muted-foreground">
+                              ძირი: <span className="text-red-600 dark:text-red-400 font-bold">{item.principal}₾</span>
+                              {' · '}%/თვე: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
+                              {' · '}გადახდა: <span className="text-blue-600 dark:text-blue-400">{item.paymentDay} რიცხვი</span>
+                            </div>
                           </div>
                         </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeLombardItem(idx)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeLombardItem(idx)}>
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Input type="text" placeholder="ნივთის დასახელება *" value={lombItemName} onChange={(e) => setLombItemName(e.target.value)} className="h-9 text-sm" />
+                  <div className="flex gap-2">
+                    <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={lombPrincipal}
+                      onChange={(e) => setLombPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                    <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={lombInterest}
+                      onChange={(e) => setLombInterest(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input type="text" inputMode="numeric" placeholder="გადახდის დღე (1-31) *" value={lombPayDay}
+                      onChange={(e) => setLombPayDay(e.target.value.replace(/[^0-9]/g, ''))}
+                      onKeyDown={(e) => { if (e.key === 'Enter') addLombardItem(); }}
+                      className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                    <Input type="text" placeholder="ხელშეკრულება # (არასავალდ.)" value={lombContract} onChange={(e) => setLombContract(e.target.value)} className="flex-1 h-9 text-sm" />
+                  </div>
+                  <Button onClick={addLombardItem} className="w-full h-9" variant="default">
+                    <Plus className="w-4 h-4 mr-1.5" /> ლობარდის დამატება
+                  </Button>
                 </div>
-              )}
-              <div className="space-y-2">
-                <Input type="text" placeholder="ნივთის დასახელება *" value={lombItemName} onChange={(e) => setLombItemName(e.target.value)} className="h-9 text-sm" />
-                <div className="flex gap-2">
-                  <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={lombPrincipal}
-                    onChange={(e) => setLombPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  />
-                  <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={lombInterest}
-                    onChange={(e) => setLombInterest(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <input type="text" inputMode="numeric" placeholder="გადახდის დღე (1-31) *" value={lombPayDay}
-                    onChange={(e) => setLombPayDay(e.target.value.replace(/[^0-9]/g, ''))}
-                    onKeyDown={(e) => { if (e.key === 'Enter') addLombardItem(); }}
-                    className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
-                  />
-                  <Input type="text" placeholder="ხელშეკრულება # (არასავალდ.)" value={lombContract} onChange={(e) => setLombContract(e.target.value)} className="flex-1 h-9 text-sm" />
-                </div>
-                <Button onClick={addLombardItem} className="w-full h-9" variant="default">
-                  <Plus className="w-4 h-4 mr-1.5" /> ლობარდის დამატება
-                </Button>
               </div>
-              <div className="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-700/50 rounded-xl p-2.5 text-[11px] text-amber-700 dark:text-amber-300 space-y-0.5">
+
+              <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-700/50 rounded-xl p-2.5 text-[11px] text-blue-600 dark:text-blue-400 space-y-0.5">
                 <p>📌 ძირი თანხა ავტომატურად დაემატება <strong>ვალებში</strong></p>
-                <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong> (12 თვე)</p>
+                <p>📌 ყოველთვიური პროცენტი/გადასახადი დაემატება <strong>ყოველთვიურ გადასახადებში</strong></p>
               </div>
+
               <div className="flex gap-2 pt-2">
                 <Button variant="secondary" onClick={() => setStep(4)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-1" /> უკან
@@ -1291,7 +1342,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   არ მაქვს
                 </Button>
                 <Button onClick={() => setStep(6)} className="flex-[2]">
-                  {lombardItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
+                  {bankItems.length === 0 && lombardItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
@@ -1379,6 +1430,27 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                       <div className="flex justify-between text-sm mt-1 pt-1 border-t border-border/50">
                         <span className="text-muted-foreground">სულ:</span>
                         <Badge variant="danger">-{monthlyBillsTotal}{'\u20BE'}/თვე</Badge>
+                      </div>
+                    </div>
+                  )}
+
+                  {utilityTotal > 0 && (
+                    <div className="border-t border-border pt-2">
+                      <span className="text-muted-foreground text-sm">⚡ კომუნალურები:</span>
+                      {Object.entries(utilityAmounts).map(([key, val]) => {
+                        const amount = parseInt(val) || 0;
+                        if (amount <= 0) return null;
+                        const util = UTILITY_TYPES.find((u) => u.key === key);
+                        return (
+                          <div key={key} className="flex justify-between text-sm mt-1">
+                            <span style={{ color: util?.color }}>{util?.icon} {util?.label}</span>
+                            <span className="text-red-600 dark:text-red-400">-{amount}{'\u20BE'}/თვე</span>
+                          </div>
+                        );
+                      })}
+                      <div className="flex justify-between text-sm mt-1 pt-1 border-t border-border/50">
+                        <span className="text-muted-foreground">სულ კომუნალური:</span>
+                        <Badge variant="danger">-{utilityTotal}{'\u20BE'}/თვე</Badge>
                       </div>
                     </div>
                   )}

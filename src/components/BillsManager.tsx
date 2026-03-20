@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { AppState, Bill, UTILITY_TYPES } from '../types';
 import { getDaysUntilDue, getUrgencyColor } from '../utils/billWarnings';
-import { Plus, X, Check, Calendar, Repeat, Pencil, Zap } from 'lucide-react';
+import { Plus, X, Check, Calendar, Repeat, Pencil } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -83,52 +83,16 @@ export const BillsManager: React.FC<BillsManagerProps> = ({
   };
 
   const currentMonth = parseInt(selectedMonth || '0');
-  const monthlyBills = state.bills.filter((b) => (b.reset_month ?? 0) === currentMonth);
+  // კომუნალური ბილები გავფილტროთ — ისინი ცალკე ტაბშია
+  const isUtilityBill = (name: string) => name.startsWith('კომუნალური:') || UTILITY_TYPES.some((u) => u.label === name);
+  const monthlyBills = state.bills.filter((b) => (b.reset_month ?? 0) === currentMonth && !isUtilityBill(b.name));
   const billsPaid = monthlyBills.filter((b) => b.paid).reduce((sum, b) => sum + b.amount, 0);
   const billsRemaining = monthlyBills
     .filter((b) => !b.paid)
     .reduce((sum, b) => sum + b.amount, 0);
   const billsTotal = monthlyBills.reduce((sum, b) => sum + b.amount, 0);
 
-  // კომუნალურის აგრეგაცია ყოველდღიური ხარჯებიდან ამ თვისთვის
-  const utilityPayments = useMemo(() => {
-    const payments: { type: string; icon: string; color: string; amount: number; date: string }[] = [];
-    Object.entries(state.db).forEach(([dateKey, dayData]) => {
-      const d = new Date(dateKey + 'T00:00:00');
-      if (d.getMonth() !== currentMonth) return;
-      (dayData.expenses || []).forEach((exp) => {
-        if (exp.subcategory === 'კომუნალური' && exp.amount > 0) {
-          const utilInfo = UTILITY_TYPES.find((u) => u.key === exp.utilityType);
-          payments.push({
-            type: exp.utilityType === 'სხვა' && exp.utilityCustomName
-              ? exp.utilityCustomName
-              : (utilInfo?.label || exp.utilityType || 'კომუნალური'),
-            icon: utilInfo?.icon || '🏠',
-            color: utilInfo?.color || '#64748b',
-            amount: exp.amount,
-            date: dateKey,
-          });
-        }
-      });
-    });
-    return payments;
-  }, [state.db, currentMonth]);
-
-  const utilityTotal = utilityPayments.reduce((sum, p) => sum + p.amount, 0);
-  // ჯგუფებად — ტიპის მიხედვით
-  const utilityByType = useMemo(() => {
-    const grouped: Record<string, { icon: string; color: string; total: number; payments: typeof utilityPayments }> = {};
-    utilityPayments.forEach((p) => {
-      if (!grouped[p.type]) {
-        grouped[p.type] = { icon: p.icon, color: p.color, total: 0, payments: [] };
-      }
-      grouped[p.type].total += p.amount;
-      grouped[p.type].payments.push(p);
-    });
-    return grouped;
-  }, [utilityPayments]);
-
-  const grandTotal = billsTotal + utilityTotal;
+  const grandTotal = billsTotal;
 
   return (
     <div className="space-y-2">
@@ -163,13 +127,7 @@ export const BillsManager: React.FC<BillsManagerProps> = ({
             <span className="text-blue-600 dark:text-blue-400">დარჩენილი:</span>
             <span className="font-bold text-blue-600 dark:text-blue-400">{billsRemaining}₾</span>
           </div>
-          {utilityTotal > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="flex items-center gap-1 text-teal-700 dark:text-teal-300"><Zap className="h-2.5 w-2.5" />კომუნალური:</span>
-              <span className="font-bold text-teal-700 dark:text-teal-300">{utilityTotal}₾</span>
-            </div>
-          )}
-          <div className="flex justify-between text-xs text-blue-800 dark:text-blue-200 pt-1.5 border-t border-blue-200 dark:border-blue-700/50">
+<div className="flex justify-between text-xs text-blue-800 dark:text-blue-200 pt-1.5 border-t border-blue-200 dark:border-blue-700/50">
             <span>სულ:</span>
             <span className="font-bold">{grandTotal}₾</span>
           </div>
@@ -177,38 +135,11 @@ export const BillsManager: React.FC<BillsManagerProps> = ({
         </CardContent>
       </Card>
 
-      {/* კომუნალური — ავტომატური აგრეგაცია */}
-      {utilityPayments.length > 0 && (
-        <Card className="bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-700/50 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-1.5 bg-teal-100 dark:bg-teal-900/30 border-b border-teal-200 dark:border-teal-700/50">
-            <div className="flex items-center gap-1.5">
-              <Zap className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-              <span className="text-xs font-bold text-teal-700 dark:text-teal-300">კომუნალური</span>
-            </div>
-            <span className="text-sm font-black text-teal-700 dark:text-teal-300">{utilityTotal}₾</span>
-          </div>
-          <CardContent className="p-2 space-y-1">
-            {Object.entries(utilityByType).map(([type, data]) => (
-              <div key={type} className="flex items-center justify-between px-2 py-1 rounded-xl" style={{ backgroundColor: `${data.color}10` }}>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">{data.icon}</span>
-                  <span className="text-xs font-bold" style={{ color: data.color }}>{type}</span>
-                  {data.payments.length > 1 && (
-                    <span className="text-[9px] text-slate-500 dark:text-slate-400">({data.payments.length}x)</span>
-                  )}
-                </div>
-                <span className="text-xs font-black" style={{ color: data.color }}>{data.total}₾</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       {/* ბილების სია */}
       <div className="space-y-2">
-        {monthlyBills.length === 0 && utilityPayments.length === 0 ? (
+        {monthlyBills.length === 0 ? (
           <p className="text-center text-slate-500 dark:text-slate-400 py-4">ამ თვეში ბილი არ დამატებულა</p>
-        ) : monthlyBills.length === 0 ? null : (
+        ) : (
           monthlyBills.map((bill) => {
             const daysUntilDue = bill.dueDate ? getDaysUntilDue(bill.dueDate) : null;
             const bgColor = bill.dueDate ? getUrgencyColor(daysUntilDue ?? 999, bill.paid) : '#475569';
