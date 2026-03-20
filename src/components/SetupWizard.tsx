@@ -1297,93 +1297,66 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                       const monthly = parseInt(bankInterest) || 0;
                       const hasdates = bankStart && bankEnd && bankStart <= bankEnd;
                       const totalMonths = hasdates ? bankMonthsBetween(bankStart, bankEnd) : 0;
-                      const monthlyRate = principal > 0 ? (monthly / principal) * 100 : 0;
-                      const annualRate = monthlyRate * 12;
-                      const totalInterest = monthly * totalMonths;
-                      const totalCost = principal + totalInterest;
+
+                      if (!principal || !monthly || !totalMonths) return null;
+
+                      // ეფექტური პროცენტის გამოთვლა
+                      const totalPaid = monthly * totalMonths;
+                      const totalInterest = totalPaid - principal;
+                      const annualEffective = (totalInterest / principal) * 100 / (totalMonths / 12);
 
                       // დარჩენილი თვეები
                       const now = new Date();
-                      const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                      let remaining = 0;
-                      if (hasdates) {
-                        const [ey, em] = bankEnd.split('-').map(Number);
-                        remaining = Math.max(0, (ey - now.getFullYear()) * 12 + (em - (now.getMonth() + 1)));
-                      }
-
-                      if (!principal && !monthly && !hasdates) return null;
+                      const [ey, em] = bankEnd.split('-').map(Number);
+                      const remaining = Math.max(0, (ey - now.getFullYear()) * 12 + (em - (now.getMonth() + 1)));
 
                       return (
-                        <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-1.5 animate-fadeIn">
-                          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">📊 კალკულაცია</p>
-                          {principal > 0 && monthly > 0 && (
-                            <>
+                        <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800/50 dark:to-blue-900/20 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2 animate-fadeIn">
+                          {/* მთავარი ინფო */}
+                          <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">ძირი თანხა</p>
+                              <p className="text-sm font-black text-slate-800 dark:text-slate-200">{principal.toLocaleString()}₾</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">თვეში</p>
+                              <p className="text-sm font-black text-orange-600 dark:text-orange-400">{monthly.toLocaleString()}₾</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] text-muted-foreground">ვადა</p>
+                              <p className="text-sm font-black text-slate-800 dark:text-slate-200">{totalMonths} თვე</p>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-slate-200 dark:border-slate-700" />
+
+                          {/* ეფექტური პროცენტი */}
+                          <div className="text-center py-1">
+                            <p className="text-[10px] text-muted-foreground">ეფექტური წლიური პროცენტი</p>
+                            <p className="text-2xl font-black text-red-600 dark:text-red-400">{annualEffective.toFixed(1)}%</p>
+                          </div>
+
+                          <div className="border-t border-slate-200 dark:border-slate-700" />
+
+                          {/* ჯამები */}
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">სულ გადაიხდი:</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{totalPaid.toLocaleString()}₾</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-muted-foreground">აქედან პროცენტი:</span>
+                              <span className="font-bold text-red-600 dark:text-red-400">{totalInterest > 0 ? totalInterest.toLocaleString() : 0}₾</span>
+                            </div>
+                            {remaining > 0 && (
                               <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">თვიური %:</span>
-                                <span className="font-bold text-orange-600 dark:text-orange-400">{monthlyRate.toFixed(2)}%</span>
+                                <span className="text-muted-foreground">დარჩენილია:</span>
+                                <span className="font-bold text-blue-600 dark:text-blue-400">
+                                  {Math.floor(remaining / 12) > 0 ? `${Math.floor(remaining / 12)} წელი ${remaining % 12} თვე` : `${remaining} თვე`}
+                                </span>
                               </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">წლიური ეფექტური %:</span>
-                                <span className="font-bold text-red-600 dark:text-red-400">{annualRate.toFixed(1)}%</span>
-                              </div>
-                            </>
-                          )}
-                          {hasdates && totalMonths > 0 && (
-                            <>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">სრული ვადა:</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-300">{totalMonths} თვე</span>
-                              </div>
-                              {remaining > 0 && (
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-muted-foreground">დარჩენილია:</span>
-                                  <span className="font-bold text-blue-600 dark:text-blue-400">
-                                    {remaining} თვე ({Math.floor(remaining / 12) > 0 ? `${Math.floor(remaining / 12)} წ. ${remaining % 12} თვ.` : `${remaining} თვ.`})
-                                  </span>
-                                </div>
-                              )}
-                              {remaining === 0 && bankEnd < nowStr && (
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-muted-foreground">სტატუსი:</span>
-                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">✅ ვადა ამოწურულია</span>
-                                </div>
-                              )}
-                            </>
-                          )}
-                          {monthly > 0 && totalMonths > 0 && (
-                            <>
-                              <div className="border-t border-slate-200 dark:border-slate-700 my-1" />
-                              <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">ჯამური პროცენტი:</span>
-                                <span className="font-bold text-orange-600 dark:text-orange-400">{totalInterest.toLocaleString()}₾</span>
-                              </div>
-                              <div className="flex justify-between text-xs">
-                                <span className="text-muted-foreground">ჯამური ღირებულება:</span>
-                                <span className="font-bold text-red-700 dark:text-red-400">{totalCost.toLocaleString()}₾</span>
-                              </div>
-                            </>
-                          )}
-                          {principal > 0 && (
-                            <>
-                              <div className="border-t border-red-200 dark:border-red-800 my-1" />
-                              <p className="text-[10px] font-bold text-red-500 dark:text-red-400 uppercase tracking-wider">⚠️ დაგვიანების სიმულაცია</p>
-                              {[1, 7, 14, 30].map((days) => {
-                                const lf = parseFloat(bankLateFee) || 20;
-                                const dp = parseFloat(bankDailyPenalty) || 0.5;
-                                const penaltyDays = Math.max(0, days - 1);
-                                const penalty = lf + (dp / 100 * principal * penaltyDays);
-                                return (
-                                  <div key={days} className="flex justify-between text-xs">
-                                    <span className="text-muted-foreground">{days} დღე დაგვიანება:</span>
-                                    <span className="font-bold text-red-600 dark:text-red-400">
-                                      +{penalty.toFixed(0)}₾
-                                      {days === 1 ? ' (ფიქს.)' : ` (${lf}₾ + ${penaltyDays}დღ × ${dp}%)`}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </>
-                          )}
+                            )}
+                          </div>
                         </div>
                       );
                     })()}
