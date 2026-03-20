@@ -638,6 +638,14 @@ export const App: React.FC = () => {
     [state, updateState]
   );
 
+  // ინსტალაციაზე დაბრუნება — მონაცემები არ იკარგება
+  const handleRerunSetup = useCallback(() => {
+    updateState({
+      ...state,
+      profile: { ...state.profile, setupCompleted: false },
+    });
+  }, [state, updateState]);
+
   const handleResetData = useCallback(() => {
     const emptyState: AppState = {
       db: {},
@@ -866,7 +874,7 @@ export const App: React.FC = () => {
         </div>
       </aside>
 
-      <ToolsMenu state={state} onImport={handleImportData} onReset={handleResetData} />
+      <ToolsMenu state={state} onImport={handleImportData} onReset={handleResetData} onRerunSetup={handleRerunSetup} />
 
       {selectedDay && (
         <DayEditor

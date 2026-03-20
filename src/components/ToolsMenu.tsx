@@ -1,16 +1,17 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { exportData, importData } from '../utils/storage';
 import { AppState } from '../types';
-import { Settings, Save, FolderOpen, Trash2 } from 'lucide-react';
+import { Settings, Save, FolderOpen, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ToolsMenuProps {
   state: AppState;
   onImport: (state: AppState) => void;
   onReset: () => void;
+  onRerunSetup: () => void;
 }
 
-export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset }) => {
+export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset, onRerunSetup }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState(() => {
     try {
@@ -153,6 +154,18 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset }
           >
             <FolderOpen className="h-4 w-4 mr-2" />
             აღდგენა
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => {
+              onRerunSetup();
+              setIsOpen(false);
+            }}
+            className="whitespace-nowrap text-sm"
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            ინსტალაცია
           </Button>
 
           <Button

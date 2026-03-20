@@ -421,6 +421,16 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
     onComplete(finalProfile, [...bills, ...lombardBills], setupDebts, setupLombards, setupBankLoans);
   };
 
+  // ინსტალაციის გამოტოვება — default პროფილით
+  const handleSkipSetup = () => {
+    const skipProfile: UserProfile = {
+      ...DEFAULT_PROFILE,
+      dailyBudget: 150,
+      setupCompleted: true,
+    };
+    onComplete(skipProfile, []);
+  };
+
   // ვალიდაცია: შემდეგ ღილაკის ჩართვა
   const canProceedStep2 = (): boolean => {
     if (profile.incomeType === 'salary') return profile.salary > 0;
@@ -448,10 +458,15 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
               <CardDescription className="text-base">
                 მართე შენი ყოველდღიური ფინანსები, დააგროვე კულაბაში და მიაღწიე შენს მიზანს
               </CardDescription>
-              <div className="pt-4">
+              <div className="pt-4 space-y-3">
                 <Button onClick={() => setStep(1)} size="lg" className="text-lg px-10 py-6">
                   დაწყება
                 </Button>
+                <div>
+                  <Button variant="ghost" onClick={handleSkipSetup} className="text-sm text-muted-foreground hover:text-slate-200">
+                    გამოტოვება — ხელით შევავსებ
+                  </Button>
+                </div>
               </div>
               <p className="text-muted-foreground/50 text-xs">პირველი ნაბიჯი - შენი შემოსავალი</p>
             </CardContent>
@@ -862,9 +877,12 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <Button variant="secondary" onClick={() => setStep(2)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> უკან
+                  <ArrowLeft className="w-4 h-4 mr-1" /> უკან
+                </Button>
+                <Button variant="ghost" onClick={() => setStep(4)} className="text-muted-foreground text-xs">
+                  არ მაქვს
                 </Button>
                 <Button onClick={() => setStep(4)} className="flex-[2]">
                   {Object.keys(uniqueBills).length === 0 ? 'გამოტოვება' : 'შემდეგი'}
@@ -984,9 +1002,12 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                 <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong></p>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <Button variant="secondary" onClick={() => setStep(3)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> უკან
+                  <ArrowLeft className="w-4 h-4 mr-1" /> უკან
+                </Button>
+                <Button variant="ghost" onClick={() => setStep(5)} className="text-muted-foreground text-xs">
+                  არ მაქვს
                 </Button>
                 <Button onClick={() => setStep(5)} className="flex-[2]">
                   {bankItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
@@ -1057,9 +1078,12 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                 <p>📌 ძირი თანხა ავტომატურად დაემატება <strong>ვალებში</strong></p>
                 <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong> (12 თვე)</p>
               </div>
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-2 pt-2">
                 <Button variant="secondary" onClick={() => setStep(4)} className="flex-1">
-                  <ArrowLeft className="w-4 h-4 mr-2" /> უკან
+                  <ArrowLeft className="w-4 h-4 mr-1" /> უკან
+                </Button>
+                <Button variant="ghost" onClick={() => setStep(6)} className="text-muted-foreground text-xs">
+                  არ მაქვს
                 </Button>
                 <Button onClick={() => setStep(6)} className="flex-[2]">
                   {lombardItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
