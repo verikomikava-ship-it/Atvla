@@ -709,16 +709,25 @@ export const App: React.FC = () => {
   // თუ setup არ არის გავლილი, wizard აჩვენე
   if (!state.profile?.setupCompleted) {
     return (
-      <SetupWizard
-        onComplete={handleSetupComplete}
-        user={user}
-        authLoading={authLoading}
-        onSignInWithGoogle={signInWithGoogle}
-        onSignInWithEmail={signInWithEmail}
-        onSignUpWithEmail={signUpWithEmail}
-        onSendPhoneCode={sendPhoneCode}
-        onConfirmPhoneCode={confirmPhoneCode}
-      />
+      <>
+        <SetupWizard
+          onComplete={handleSetupComplete}
+          user={user}
+          authLoading={authLoading}
+          onSignInWithGoogle={signInWithGoogle}
+          onSignInWithEmail={signInWithEmail}
+          onSignUpWithEmail={signUpWithEmail}
+          onSendPhoneCode={sendPhoneCode}
+          onConfirmPhoneCode={confirmPhoneCode}
+        />
+        <button
+          onClick={toggleTheme}
+          className="fixed bottom-4 right-4 w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-50 transition-colors bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600"
+          title={isDark ? 'ღია თემა' : 'მუქი თემა'}
+        >
+          {isDark ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+        </button>
+      </>
     );
   }
 

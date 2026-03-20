@@ -673,6 +673,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   </Button>
                 </div>
               </div>
+
             </CardContent>
           </Card>
         )}
