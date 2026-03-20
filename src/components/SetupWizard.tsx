@@ -1253,7 +1253,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                         onChange={(e) => setBankPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
                         className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
                       />
-                      <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={bankInterest}
+                      <input type="text" inputMode="numeric" placeholder="თვიური გადასახადი ₾ *" value={bankInterest}
                         onChange={(e) => setBankInterest(e.target.value.replace(/[^0-9]/g, ''))}
                         className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
                       />
@@ -1302,9 +1302,11 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
 
                       if (!principal || !monthly || !totalMonths) return null;
 
-                      // ეფექტური პროცენტის გამოთვლა (monthly = მხოლოდ პროცენტი, ძირი ცალკეა)
-                      const totalInterest = monthly * totalMonths;
-                      const annualEffective = (monthly * 12) / principal * 100;
+                      // ეფექტური პროცენტის გამოთვლა
+                      const totalPaid = monthly * totalMonths;
+                      const totalInterest = totalPaid - principal;
+                      const years = totalMonths / 12;
+                      const annualEffective = totalInterest > 0 ? (totalInterest / principal) * 100 / years : 0;
                       const remaining = Math.max(0, totalMonths - paidMonths);
 
                       return (
@@ -1338,13 +1340,15 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                           {/* ჯამები */}
                           <div className="space-y-1">
                             <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">ძირი + პროცენტი სულ:</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-300">{(principal + totalInterest).toLocaleString()}₾</span>
+                              <span className="text-muted-foreground">სულ გადაიხდი:</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{totalPaid.toLocaleString()}₾</span>
                             </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">სულ პროცენტი ({totalMonths} თვე):</span>
-                              <span className="font-bold text-red-600 dark:text-red-400">{totalInterest.toLocaleString()}₾</span>
-                            </div>
+                            {totalInterest > 0 && (
+                              <div className="flex justify-between text-xs">
+                                <span className="text-muted-foreground">აქედან პროცენტი:</span>
+                                <span className="font-bold text-red-600 dark:text-red-400">{totalInterest.toLocaleString()}₾</span>
+                              </div>
+                            )}
                             {remaining > 0 && (
                               <div className="flex justify-between text-xs">
                                 <span className="text-muted-foreground">დარჩენილია:</span>
