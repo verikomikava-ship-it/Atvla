@@ -100,7 +100,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   // ბანკი state
   const [bankItems, setBankItems] = useState<{
     type: BankProductType; name?: string; principal: number;
-    monthlyInterest: number; paymentDay: number; startDate: string; endDate: string;
+    monthlyInterest: number; paymentDay: number;
+    totalMonths: number; paidMonths: number;
     lateFee: number; dailyPenaltyRate: number;
   }[]>([]);
   const [bankType, setBankType] = useState<BankProductType | null>(null);
@@ -108,8 +109,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
   const [bankPrincipal, setBankPrincipal] = useState('');
   const [bankInterest, setBankInterest] = useState('');
   const [bankPayDay, setBankPayDay] = useState('');
-  const [bankStart, setBankStart] = useState('');
-  const [bankEnd, setBankEnd] = useState('');
+  const [bankTotalMonths, setBankTotalMonths] = useState('');
+  const [bankPaidMonths, setBankPaidMonths] = useState('');
   const [bankLateFee, setBankLateFee] = useState('20');
   const [bankDailyPenalty, setBankDailyPenalty] = useState('0.5');
 
@@ -293,18 +294,21 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
     const pr = parseInt(bankPrincipal) || 0;
     const interest = parseInt(bankInterest) || 0;
     const day = parseInt(bankPayDay) || 0;
+    const total = parseInt(bankTotalMonths) || 0;
+    const paid = parseInt(bankPaidMonths) || 0;
     if (pr <= 0) { alert('შეიყვანე სწორი ძირი თანხა'); return; }
     if (interest <= 0) { alert('შეიყვანე სწორი პროცენტის თანხა'); return; }
     if (day < 1 || day > 31) { alert('შეიყვანე გადახდის დღე (1-31)'); return; }
-    if (!bankStart || !bankEnd) { alert('შეიყვანე ვადა'); return; }
-    if (bankStart > bankEnd) { alert('დასაწყისი უნდა იყოს დასასრულამდე'); return; }
+    if (total <= 0) { alert('შეიყვანე რამდენთვიანია სესხი'); return; }
+    if (paid > total) { alert('გადახდილი თვეები ვადაზე მეტია'); return; }
     setBankItems((prev) => [...prev, {
       type: bankType, name: bankName.trim() || undefined, principal: pr,
-      monthlyInterest: interest, paymentDay: day, startDate: bankStart, endDate: bankEnd,
+      monthlyInterest: interest, paymentDay: day,
+      totalMonths: total, paidMonths: paid,
       lateFee: parseFloat(bankLateFee) || 20, dailyPenaltyRate: parseFloat(bankDailyPenalty) || 0.5,
     }]);
     setBankType(null); setBankName(''); setBankPrincipal(''); setBankInterest('');
-    setBankPayDay(''); setBankStart(''); setBankEnd('');
+    setBankPayDay(''); setBankTotalMonths(''); setBankPaidMonths('');
     setBankLateFee('20'); setBankDailyPenalty('0.5');
   };
 
@@ -312,11 +316,6 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
     setBankItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const bankMonthsBetween = (start: string, end: string): number => {
-    const [sy, sm] = start.split('-').map(Number);
-    const [ey, em] = end.split('-').map(Number);
-    return (ey - sy) * 12 + (em - sm) + 1;
-  };
 
   const handleFinish = () => {
     const finalProfile: UserProfile = {
@@ -408,10 +407,15 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
       const bankBaseId = Date.now() + 500000 + idx * 1000;
       const bankDebtId = bankBaseId;
       const bankBillIds: number[] = [];
-      const [bsy, bsm] = item.startDate.split('-').map(Number);
-      const [bey, bem] = item.endDate.split('-').map(Number);
-      const bTotalMonths = (bey - bsy) * 12 + (bem - bsm) + 1;
       const bLabel = item.name ? `${item.type}: ${item.name}` : item.type;
+
+      // startDate/endDate გამოითვალოს paidMonths/totalMonths-დან
+      const startMonth = new Date();
+      startMonth.setMonth(startMonth.getMonth() - item.paidMonths);
+      const endMonth = new Date();
+      endMonth.setMonth(endMonth.getMonth() + (item.totalMonths - item.paidMonths));
+      const bStartDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}`;
+      const bEndDate = `${endMonth.getFullYear()}-${String(endMonth.getMonth() + 1).padStart(2, '0')}`;
 
       setupDebts.push({
         id: bankDebtId,
@@ -420,8 +424,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
         paid: false,
         priority: 'high',
         paidAmount: 0,
-        parts: bTotalMonths,
-        paidParts: 0,
+        parts: item.totalMonths,
+        paidParts: item.paidMonths,
       });
 
       for (let month = 0; month < 12; month++) {
@@ -449,9 +453,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
         principal: item.principal,
         monthlyInterest: item.monthlyInterest,
         paymentDay: item.paymentDay,
-        startDate: item.startDate,
-        endDate: item.endDate,
-        totalMonths: bTotalMonths,
+        startDate: bStartDate,
+        endDate: bEndDate,
+        totalMonths: item.totalMonths,
         debtId: bankDebtId,
         billIds: bankBillIds,
         active: true,
@@ -1189,7 +1193,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                   <div className="space-y-1.5">
                     {bankItems.map((item, idx) => {
                       const typeInfo = BANK_PRODUCT_TYPES.find((t) => t.key === item.type);
-                      const months = bankMonthsBetween(item.startDate, item.endDate);
+                      const remaining = item.totalMonths - item.paidMonths;
                       return (
                         <div key={idx} className="flex justify-between items-center p-2.5 rounded-xl border" style={{ borderColor: `${typeInfo?.color}40`, backgroundColor: `${typeInfo?.color}08` }}>
                           <div className="flex items-center gap-2">
@@ -1199,12 +1203,10 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                               {item.name && <span className="text-[10px] text-muted-foreground ml-1">· {item.name}</span>}
                               <div className="text-[10px] text-muted-foreground">
                                 ძირი: <span className="text-red-600 dark:text-red-400 font-bold">{item.principal}₾</span>
-                                {' · '}%/თვე: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
-                                {' · '}{months} თვე
-                              </div>
-                              <div className="text-[10px] text-muted-foreground">
-                                ⚠️ ჯარიმა: <span className="text-red-500 font-bold">{item.lateFee}₾</span>
-                                {' · '}პენალტი: <span className="text-red-500 font-bold">{item.dailyPenaltyRate}%/დღე</span>
+                                {' · '}თვეში: <span className="text-orange-600 dark:text-orange-400 font-bold">{item.monthlyInterest}₾</span>
+                                {' · '}{item.totalMonths} თვე
+                                {item.paidMonths > 0 && <> · გადახდილი: <span className="text-emerald-600 dark:text-emerald-400 font-bold">{item.paidMonths} თვე</span></>}
+                                {remaining > 0 && <> · დარჩა: <span className="text-blue-600 dark:text-blue-400 font-bold">{remaining} თვე</span></>}
                               </div>
                             </div>
                           </div>
@@ -1261,14 +1263,14 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                       className="w-full h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
                     />
                     <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასაწყისი *</label>
-                        <Input type="month" value={bankStart} onChange={(e) => setBankStart(e.target.value)} className="h-9 text-sm" />
-                      </div>
-                      <div className="flex-1">
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასასრული *</label>
-                        <Input type="month" value={bankEnd} onChange={(e) => setBankEnd(e.target.value)} className="h-9 text-sm" />
-                      </div>
+                      <input type="text" inputMode="numeric" placeholder="რამდენთვიანია სესხი *" value={bankTotalMonths}
+                        onChange={(e) => setBankTotalMonths(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                      />
+                      <input type="text" inputMode="numeric" placeholder="რამდენი თვეა იხდი" value={bankPaidMonths}
+                        onChange={(e) => setBankPaidMonths(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="flex-1 h-10 rounded-xl border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                      />
                     </div>
                     {/* ჯარიმის პარამეტრები */}
                     <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-700/50 rounded-xl p-2.5 space-y-2">
@@ -1295,8 +1297,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                     {(() => {
                       const principal = parseInt(bankPrincipal) || 0;
                       const monthly = parseInt(bankInterest) || 0;
-                      const hasdates = bankStart && bankEnd && bankStart <= bankEnd;
-                      const totalMonths = hasdates ? bankMonthsBetween(bankStart, bankEnd) : 0;
+                      const totalMonths = parseInt(bankTotalMonths) || 0;
+                      const paidMonths = parseInt(bankPaidMonths) || 0;
 
                       if (!principal || !monthly || !totalMonths) return null;
 
@@ -1304,11 +1306,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                       const totalPaid = monthly * totalMonths;
                       const totalInterest = totalPaid - principal;
                       const annualEffective = (totalInterest / principal) * 100 / (totalMonths / 12);
-
-                      // დარჩენილი თვეები
-                      const now = new Date();
-                      const [ey, em] = bankEnd.split('-').map(Number);
-                      const remaining = Math.max(0, (ey - now.getFullYear()) * 12 + (em - (now.getMonth() + 1)));
+                      const remaining = Math.max(0, totalMonths - paidMonths);
 
                       return (
                         <div className="bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-800/50 dark:to-blue-900/20 border border-slate-200 dark:border-slate-700 rounded-xl p-3 space-y-2 animate-fadeIn">
