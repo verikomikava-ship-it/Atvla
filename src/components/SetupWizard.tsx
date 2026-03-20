@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { User, ConfirmationResult } from 'firebase/auth';
 import { UserProfile, PayFrequency, Bill, Debt, Lombard, BankLoan, BankProductType, BANK_PRODUCT_TYPES, UTILITY_TYPES } from '../types';
 import { getWorkDaysInMonth } from '../utils/calculations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Briefcase, Rocket, Layers, ArrowLeft, ArrowRight, Plus, X, Check, Calendar, Package, Landmark } from 'lucide-react';
+import { Briefcase, Rocket, Layers, ArrowLeft, ArrowRight, Plus, X, Check, Calendar, Package, Landmark, Cloud, CloudOff } from 'lucide-react';
 
 // ყოველთვიური გადასახადის კატეგორიები (სესხი ამოიღო — ცალკე "ბანკი" step-ში გადავიდა)
 const BILL_CATEGORIES = [
@@ -21,6 +22,14 @@ const BILL_CATEGORIES = [
 
 interface SetupWizardProps {
   onComplete: (profile: UserProfile, bills: Bill[], debts?: Debt[], lombards?: Lombard[], bankLoans?: BankLoan[]) => void;
+  // Auth props
+  user: User | null;
+  authLoading: boolean;
+  onSignInWithGoogle: () => Promise<void>;
+  onSignInWithEmail: (email: string, password: string) => Promise<void>;
+  onSignUpWithEmail: (email: string, password: string) => Promise<void>;
+  onSendPhoneCode: (phone: string, recaptchaId: string) => Promise<ConfirmationResult>;
+  onConfirmPhoneCode: (result: ConfirmationResult, code: string) => Promise<void>;
 }
 
 const WEEK_DAYS = [
@@ -46,10 +55,25 @@ const DEFAULT_PROFILE: UserProfile = {
   dailyBudget: 0,
 };
 
-export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
+export const SetupWizard: React.FC<SetupWizardProps> = ({
+  onComplete, user, authLoading,
+  onSignInWithGoogle, onSignInWithEmail, onSignUpWithEmail,
+  onSendPhoneCode, onConfirmPhoneCode,
+}) => {
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [bills, setBills] = useState<Bill[]>([]);
+
+  // Auth state (step 0.5)
+  const [authTab, setAuthTab] = useState<'google' | 'email' | 'phone'>('google');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authIsSignUp, setAuthIsSignUp] = useState(false);
+  const [authPhone, setAuthPhone] = useState('+995');
+  const [authConfirmResult, setAuthConfirmResult] = useState<ConfirmationResult | null>(null);
+  const [authSmsCode, setAuthSmsCode] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authBusy, setAuthBusy] = useState(false);
 
   // String state ინფუთებისთვის (Electron-ში number value არ მუშაობს)
   const [salaryInput, setSalaryInput] = useState('');
@@ -449,7 +473,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
 
-        {/* Step 0: მისასალმებელი */}
+        {/* Step 0: მისასალმებელი + ავტორიზაცია */}
         {step === 0 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardContent className="pt-8 pb-8 text-center space-y-6">
@@ -458,17 +482,197 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
               <CardDescription className="text-base">
                 მართე შენი ყოველდღიური ფინანსები, დააგროვე კულაბაში და მიაღწიე შენს მიზანს
               </CardDescription>
-              <div className="pt-4 space-y-3">
+
+              {/* ავტორიზაციის სექცია */}
+              {!authLoading && (
+                <div className="pt-2">
+                  {user ? (
+                    // შესულია
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-center gap-2 text-emerald-400">
+                        <Cloud className="w-5 h-5" />
+                        <span className="font-bold text-sm">ღრუბელთან დაკავშირებულია</span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt="" className="w-6 h-6 rounded-full" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center text-black text-xs font-bold">
+                            {(user.displayName || user.email || '?')[0].toUpperCase()}
+                          </div>
+                        )}
+                        <span className="text-sm text-slate-300">{user.displayName || user.email || user.phoneNumber}</span>
+                      </div>
+                      <p className="text-xs text-emerald-400/60">შენი მონაცემები ავტომატურად შეინახება ღრუბელში</p>
+                    </div>
+                  ) : (
+                    // არ არის შესული — რეგისტრაციის შეთავაზება
+                    <div className="bg-slate-800/50 border border-slate-600/50 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center justify-center gap-2 text-slate-400">
+                        <CloudOff className="w-5 h-5" />
+                        <span className="font-bold text-sm">ღრუბლის სინქრონიზაცია</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        თუ გაივლი რეგისტრაციას, შენი მონაცემები შეინახება ღრუბელში და <strong className="text-slate-200">ყველა მოწყობილობაზე</strong> (ტელეფონი, ლეპტოპი, ტაბლეტი) სინქრონიზდება ავტომატურად.
+                      </p>
+
+                      {/* Auth tabs */}
+                      <div className="flex gap-1">
+                        {([
+                          { key: 'google' as const, label: 'Google', icon: '🔵' },
+                          { key: 'email' as const, label: 'ელ-ფოსტა', icon: '📧' },
+                          { key: 'phone' as const, label: 'ტელეფონი', icon: '📱' },
+                        ]).map((t) => (
+                          <button
+                            key={t.key}
+                            onClick={() => { setAuthTab(t.key); setAuthError(''); }}
+                            className={cn(
+                              'flex-1 text-xs py-1.5 rounded-md transition-colors',
+                              authTab === t.key
+                                ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                                : 'bg-slate-700/30 text-slate-500 hover:text-slate-400 border border-transparent'
+                            )}
+                          >
+                            <span className="text-sm">{t.icon}</span> {t.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {authError && (
+                        <p className="text-xs text-red-400 bg-red-400/10 p-2 rounded">{authError}</p>
+                      )}
+
+                      {/* Google */}
+                      {authTab === 'google' && (
+                        <Button
+                          className="w-full"
+                          disabled={authBusy}
+                          onClick={async () => {
+                            setAuthError('');
+                            setAuthBusy(true);
+                            try { await onSignInWithGoogle(); }
+                            catch (e) { setAuthError(e instanceof Error ? e.message : 'შეცდომა'); }
+                            finally { setAuthBusy(false); }
+                          }}
+                        >
+                          🔵 {authBusy ? 'იტვირთება...' : 'Google-ით შესვლა'}
+                        </Button>
+                      )}
+
+                      {/* Email */}
+                      {authTab === 'email' && (
+                        <div className="space-y-2">
+                          <input
+                            type="email" placeholder="ელ-ფოსტა" value={authEmail}
+                            onChange={(e) => setAuthEmail(e.target.value)}
+                            className="w-full px-3 py-2 rounded-md bg-slate-700 border border-slate-600 text-slate-200 text-sm outline-none focus:border-yellow-500"
+                          />
+                          <input
+                            type="password" placeholder="პაროლი (6+ სიმბოლო)" value={authPassword}
+                            onChange={(e) => setAuthPassword(e.target.value)}
+                            className="w-full px-3 py-2 rounded-md bg-slate-700 border border-slate-600 text-slate-200 text-sm outline-none focus:border-yellow-500"
+                          />
+                          <Button
+                            className="w-full" disabled={authBusy || !authEmail || authPassword.length < 6}
+                            onClick={async () => {
+                              setAuthError('');
+                              setAuthBusy(true);
+                              try {
+                                if (authIsSignUp) await onSignUpWithEmail(authEmail, authPassword);
+                                else await onSignInWithEmail(authEmail, authPassword);
+                              } catch (e) {
+                                const msg = e instanceof Error ? e.message : 'შეცდომა';
+                                if (msg.includes('wrong-password') || msg.includes('invalid-credential')) setAuthError('არასწორი პაროლი');
+                                else if (msg.includes('user-not-found')) setAuthError('მომხმარებელი ვერ მოიძებნა');
+                                else if (msg.includes('email-already')) setAuthError('ეს ელ-ფოსტა უკვე რეგისტრირებულია');
+                                else setAuthError(msg);
+                              } finally { setAuthBusy(false); }
+                            }}
+                          >
+                            📧 {authBusy ? 'იტვირთება...' : authIsSignUp ? 'რეგისტრაცია' : 'შესვლა'}
+                          </Button>
+                          <button
+                            onClick={() => { setAuthIsSignUp(!authIsSignUp); setAuthError(''); }}
+                            className="text-xs text-slate-500 underline w-full text-center"
+                          >
+                            {authIsSignUp ? 'უკვე მაქვს ანგარიში' : 'არ მაქვს ანგარიში — რეგისტრაცია'}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Phone */}
+                      {authTab === 'phone' && (
+                        <div className="space-y-2">
+                          {!authConfirmResult ? (
+                            <>
+                              <input
+                                type="tel" value={authPhone} onChange={(e) => setAuthPhone(e.target.value)}
+                                placeholder="+995 5XX XXX XXX"
+                                className="w-full px-3 py-2 rounded-md bg-slate-700 border border-slate-600 text-slate-200 text-sm outline-none focus:border-yellow-500"
+                              />
+                              <Button
+                                className="w-full" disabled={authBusy || authPhone.length < 9}
+                                onClick={async () => {
+                                  setAuthError('');
+                                  setAuthBusy(true);
+                                  try {
+                                    const result = await onSendPhoneCode(authPhone, 'setup-recaptcha');
+                                    setAuthConfirmResult(result);
+                                  } catch (e) {
+                                    const msg = e instanceof Error ? e.message : 'შეცდომა';
+                                    if (msg.includes('not-allowed')) setAuthError('SMS ამ რეგიონში მიუწვდომელია');
+                                    else setAuthError(msg);
+                                  } finally { setAuthBusy(false); }
+                                }}
+                              >
+                                📱 {authBusy ? 'იგზავნება...' : 'კოდის გაგზავნა'}
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-xs text-slate-400">SMS კოდი გამოგზავნილია</p>
+                              <input
+                                type="text" value={authSmsCode} onChange={(e) => setAuthSmsCode(e.target.value)}
+                                placeholder="6-ნიშნა კოდი" maxLength={6}
+                                className="w-full px-3 py-2 rounded-md bg-slate-700 border border-slate-600 text-slate-200 text-sm text-center tracking-widest outline-none focus:border-yellow-500"
+                              />
+                              <Button
+                                className="w-full" disabled={authBusy || authSmsCode.length < 6}
+                                onClick={async () => {
+                                  setAuthError('');
+                                  setAuthBusy(true);
+                                  try { await onConfirmPhoneCode(authConfirmResult!, authSmsCode); }
+                                  catch { setAuthError('არასწორი კოდი'); }
+                                  finally { setAuthBusy(false); }
+                                }}
+                              >
+                                {authBusy ? 'მოწმდება...' : 'დადასტურება'}
+                              </Button>
+                            </>
+                          )}
+                          <div id="setup-recaptcha" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="pt-2 space-y-3">
                 <Button onClick={() => setStep(1)} size="lg" className="text-lg px-10 py-6">
-                  დაწყება
+                  {user ? 'დაწყება' : 'გაგრძელება რეგისტრაციის გარეშე'}
                 </Button>
+                {!user && (
+                  <p className="text-muted-foreground/40 text-[10px]">
+                    რეგისტრაციის გარეშე მონაცემები მხოლოდ ამ მოწყობილობაზე შეინახება
+                  </p>
+                )}
                 <div>
                   <Button variant="ghost" onClick={handleSkipSetup} className="text-sm text-muted-foreground hover:text-slate-200">
                     გამოტოვება — ხელით შევავსებ
                   </Button>
                 </div>
               </div>
-              <p className="text-muted-foreground/50 text-xs">პირველი ნაბიჯი - შენი შემოსავალი</p>
             </CardContent>
           </Card>
         )}

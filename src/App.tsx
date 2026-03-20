@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { AppState, DayData, Debt, DebtPriority, UserProfile, Bill, Subscription, Loan, Lombard, BankLoan, BankProductType } from '@/types';
 import { useAppState } from '@/hooks/useAppState';
+import { useAuth } from '@/hooks/useAuth';
+import { useFirestoreSync } from '@/hooks/useFirestoreSync';
 import { calculateStats } from '@/utils/calculations';
 import { MONTH_NAMES } from '@/utils/constants';
 import { Header } from '@/components/Header';
@@ -16,16 +18,46 @@ import { StatsView } from '@/components/StatsView';
 import { ToolsMenu } from '@/components/ToolsMenu';
 import { DiaryView } from '@/components/DiaryView';
 import { SetupWizard } from '@/components/SetupWizard';
+import { AuthModal } from '@/components/AuthModal';
 import { cn } from '@/lib/utils';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Cloud, CloudOff } from 'lucide-react';
 import './App.css';
 
 export const App: React.FC = () => {
   const { state, updateState } = useAppState();
+  const {
+    user,
+    loading: authLoading,
+    signInWithGoogle,
+    signInWithFacebook,
+    sendPhoneCode,
+    confirmPhoneCode,
+    signInWithEmail,
+    signUpWithEmail,
+    logout,
+  } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
   const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'subscriptions' | 'loans' | 'lombards' | 'bank' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+
+  // Firestore სინქრონიზაცია
+  const isRemoteUpdate = useRef(false);
+  const { syncToFirestore } = useFirestoreSync(user, state, (remoteState) => {
+    isRemoteUpdate.current = true;
+    updateState(remoteState);
+    setTimeout(() => { isRemoteUpdate.current = false; }, 300);
+  });
+
+  // state ცვლილებისას Firestore-ში გაგზავნა (მხოლოდ ლოკალური ცვლილებები)
+  const prevState = useRef(state);
+  useEffect(() => {
+    if (state !== prevState.current && !isRemoteUpdate.current) {
+      syncToFirestore(state);
+    }
+    prevState.current = state;
+  }, [state, syncToFirestore]);
 
   const stats = useMemo(() => calculateStats(state), [state]);
 
@@ -674,7 +706,18 @@ export const App: React.FC = () => {
 
   // თუ setup არ არის გავლილი, wizard აჩვენე
   if (!state.profile?.setupCompleted) {
-    return <SetupWizard onComplete={handleSetupComplete} />;
+    return (
+      <SetupWizard
+        onComplete={handleSetupComplete}
+        user={user}
+        authLoading={authLoading}
+        onSignInWithGoogle={signInWithGoogle}
+        onSignInWithEmail={signInWithEmail}
+        onSignUpWithEmail={signUpWithEmail}
+        onSendPhoneCode={sendPhoneCode}
+        onConfirmPhoneCode={confirmPhoneCode}
+      />
+    );
   }
 
   const tabsRow1 = [
@@ -875,6 +918,38 @@ export const App: React.FC = () => {
       </aside>
 
       <ToolsMenu state={state} onImport={handleImportData} onReset={handleResetData} onRerunSetup={handleRerunSetup} />
+
+      {/* ღრუბლის ღილაკი */}
+      {!authLoading && (
+        <button
+          onClick={() => setShowAuth(true)}
+          className="fixed bottom-4 left-4 w-12 h-12 rounded-full flex items-center justify-center shadow-lg z-50 transition-colors"
+          style={{
+            backgroundColor: user ? '#22c55e' : '#64748b',
+          }}
+          title={user ? 'სინქრონიზებულია' : 'ავტორიზაცია'}
+        >
+          {user ? (
+            <Cloud className="w-5 h-5 text-white" />
+          ) : (
+            <CloudOff className="w-5 h-5 text-white" />
+          )}
+        </button>
+      )}
+
+      {showAuth && (
+        <AuthModal
+          user={user}
+          onSignInWithGoogle={signInWithGoogle}
+          onSignInWithFacebook={signInWithFacebook}
+          onSendPhoneCode={sendPhoneCode}
+          onConfirmPhoneCode={confirmPhoneCode}
+          onSignInWithEmail={signInWithEmail}
+          onSignUpWithEmail={signUpWithEmail}
+          onLogout={logout}
+          onClose={() => setShowAuth(false)}
+        />
+      )}
 
       {selectedDay && (
         <DayEditor
