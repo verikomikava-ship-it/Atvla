@@ -1302,10 +1302,9 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
 
                       if (!principal || !monthly || !totalMonths) return null;
 
-                      // ეფექტური პროცენტის გამოთვლა
-                      const totalPaid = monthly * totalMonths;
-                      const totalInterest = totalPaid - principal;
-                      const annualEffective = (totalInterest / principal) * 100 / (totalMonths / 12);
+                      // ეფექტური პროცენტის გამოთვლა (monthly = მხოლოდ პროცენტი, ძირი ცალკეა)
+                      const totalInterest = monthly * totalMonths;
+                      const annualEffective = (monthly * 12) / principal * 100;
                       const remaining = Math.max(0, totalMonths - paidMonths);
 
                       return (
@@ -1339,12 +1338,12 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                           {/* ჯამები */}
                           <div className="space-y-1">
                             <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">სულ გადაიხდი:</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-300">{totalPaid.toLocaleString()}₾</span>
+                              <span className="text-muted-foreground">ძირი + პროცენტი სულ:</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{(principal + totalInterest).toLocaleString()}₾</span>
                             </div>
                             <div className="flex justify-between text-xs">
-                              <span className="text-muted-foreground">აქედან პროცენტი:</span>
-                              <span className="font-bold text-red-600 dark:text-red-400">{totalInterest > 0 ? totalInterest.toLocaleString() : 0}₾</span>
+                              <span className="text-muted-foreground">სულ პროცენტი ({totalMonths} თვე):</span>
+                              <span className="font-bold text-red-600 dark:text-red-400">{totalInterest.toLocaleString()}₾</span>
                             </div>
                             {remaining > 0 && (
                               <div className="flex justify-between text-xs">
