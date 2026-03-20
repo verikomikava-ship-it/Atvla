@@ -155,6 +155,33 @@ export type Loan = {
   comment?: string;
 };
 
+// ბანკი / საკრედიტო პროდუქტები
+export type BankProductType = 'იპოთეკური სესხი' | 'სესხი' | 'საკრედიტო ბარათი' | 'განვადება' | 'ნაწილ-ნაწილ გადახდა';
+
+export const BANK_PRODUCT_TYPES: { key: BankProductType; label: string; icon: string; color: string }[] = [
+  { key: 'იპოთეკური სესხი', label: 'იპოთეკური სესხი', icon: '🏠', color: '#ef4444' },
+  { key: 'სესხი', label: 'სესხი', icon: '💰', color: '#f59e0b' },
+  { key: 'საკრედიტო ბარათი', label: 'საკრედიტო ბარათი', icon: '💳', color: '#8b5cf6' },
+  { key: 'განვადება', label: 'განვადება', icon: '📋', color: '#3b82f6' },
+  { key: 'ნაწილ-ნაწილ გადახდა', label: 'ნაწილ-ნაწილ გადახდა', icon: '🔢', color: '#06b6d4' },
+];
+
+export type BankLoan = {
+  id: number;
+  type: BankProductType;
+  name?: string;              // დამატებითი სახელი (სურვილისამებრ)
+  principal: number;          // ძირი თანხა → ვალები
+  monthlyInterest: number;    // ყოველთვიური პროცენტი → ბილები
+  paymentDay: number;         // გადახდის დღე (1-31)
+  startDate: string;          // ვადის დასაწყისი YYYY-MM
+  endDate: string;            // ვადის დასასრული YYYY-MM
+  totalMonths: number;        // სულ რამდენი თვე
+  debtId: number;             // დაკავშირებული ვალის ID
+  billIds: number[];          // დაკავშირებული ბილების ID-ები
+  active: boolean;
+  createdAt: string;
+};
+
 // ლობარდი
 export type Lombard = {
   id: number;
@@ -202,6 +229,7 @@ export type AppState = {
   subscriptions: Subscription[];
   loans: Loan[];
   lombards: Lombard[];
+  bankLoans: BankLoan[];
   goal: number;
   goalName: string;
   profile: UserProfile;

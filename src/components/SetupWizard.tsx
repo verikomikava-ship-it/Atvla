@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
-import { UserProfile, PayFrequency, Bill, Debt, Lombard, UTILITY_TYPES } from '../types';
+import { UserProfile, PayFrequency, Bill, Debt, Lombard, BankLoan, BankProductType, BANK_PRODUCT_TYPES, UTILITY_TYPES } from '../types';
 import { getWorkDaysInMonth } from '../utils/calculations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { Briefcase, Rocket, Layers, ArrowLeft, ArrowRight, Plus, X, Check, Calendar, Package } from 'lucide-react';
+import { Briefcase, Rocket, Layers, ArrowLeft, ArrowRight, Plus, X, Check, Calendar, Package, Landmark } from 'lucide-react';
 
-// ყოველთვიური გადასახადის კატეგორიები
+// ყოველთვიური გადასახადის კატეგორიები (სესხი ამოიღო — ცალკე "ბანკი" step-ში გადავიდა)
 const BILL_CATEGORIES = [
   { key: 'კომუნალური', label: 'კომუნალური', icon: '🏠', color: '#14b8a6', hasSubTypes: true },
   { key: 'ქირა', label: 'ქირა', icon: '🏢', color: '#8b5cf6' },
-  { key: 'სესხი', label: 'სესხი / განვადება', icon: '🏦', color: '#ef4444' },
   { key: 'ინტერნეტი', label: 'ინტერნეტი', icon: '🌐', color: '#3b82f6' },
   { key: 'დაზღვევა', label: 'დაზღვევა', icon: '🛡️', color: '#f59e0b' },
   { key: 'ტელეფონი', label: 'ტელეფონი', icon: '📱', color: '#06b6d4' },
@@ -21,7 +20,7 @@ const BILL_CATEGORIES = [
 ] as const;
 
 interface SetupWizardProps {
-  onComplete: (profile: UserProfile, bills: Bill[], debts?: Debt[], lombards?: Lombard[]) => void;
+  onComplete: (profile: UserProfile, bills: Bill[], debts?: Debt[], lombards?: Lombard[], bankLoans?: BankLoan[]) => void;
 }
 
 const WEEK_DAYS = [
@@ -75,6 +74,19 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
   const [lombInterest, setLombInterest] = useState('');
   const [lombContract, setLombContract] = useState('');
   const [lombPayDay, setLombPayDay] = useState('');
+
+  // ბანკი state
+  const [bankItems, setBankItems] = useState<{
+    type: BankProductType; name?: string; principal: number;
+    monthlyInterest: number; paymentDay: number; startDate: string; endDate: string;
+  }[]>([]);
+  const [bankType, setBankType] = useState<BankProductType | null>(null);
+  const [bankName, setBankName] = useState('');
+  const [bankPrincipal, setBankPrincipal] = useState('');
+  const [bankInterest, setBankInterest] = useState('');
+  const [bankPayDay, setBankPayDay] = useState('');
+  const [bankStart, setBankStart] = useState('');
+  const [bankEnd, setBankEnd] = useState('');
 
   // სინქრონიზაცია: string → profile number
   const updateSalary = (val: string) => {
@@ -256,6 +268,35 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
     setLombardItems((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // ბანკის ფუნქციები
+  const addBankItem = () => {
+    if (!bankType) { alert('აირჩიე პროდუქტის ტიპი'); return; }
+    const pr = parseInt(bankPrincipal) || 0;
+    const interest = parseInt(bankInterest) || 0;
+    const day = parseInt(bankPayDay) || 0;
+    if (pr <= 0) { alert('შეიყვანე სწორი ძირი თანხა'); return; }
+    if (interest <= 0) { alert('შეიყვანე სწორი პროცენტის თანხა'); return; }
+    if (day < 1 || day > 31) { alert('შეიყვანე გადახდის დღე (1-31)'); return; }
+    if (!bankStart || !bankEnd) { alert('შეიყვანე ვადა'); return; }
+    if (bankStart > bankEnd) { alert('დასაწყისი უნდა იყოს დასასრულამდე'); return; }
+    setBankItems((prev) => [...prev, {
+      type: bankType, name: bankName.trim() || undefined, principal: pr,
+      monthlyInterest: interest, paymentDay: day, startDate: bankStart, endDate: bankEnd,
+    }]);
+    setBankType(null); setBankName(''); setBankPrincipal(''); setBankInterest('');
+    setBankPayDay(''); setBankStart(''); setBankEnd('');
+  };
+
+  const removeBankItem = (index: number) => {
+    setBankItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const bankMonthsBetween = (start: string, end: string): number => {
+    const [sy, sm] = start.split('-').map(Number);
+    const [ey, em] = end.split('-').map(Number);
+    return (ey - sy) * 12 + (em - sm) + 1;
+  };
+
   const handleFinish = () => {
     const finalProfile: UserProfile = {
       ...profile,
@@ -319,7 +360,64 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
       });
     });
 
-    onComplete(finalProfile, [...bills, ...lombardBills], setupDebts, setupLombards);
+    // ბანკის პროდუქტების გენერაცია
+    const setupBankLoans: BankLoan[] = [];
+    bankItems.forEach((item, idx) => {
+      const bankBaseId = Date.now() + 500000 + idx * 1000;
+      const bankDebtId = bankBaseId;
+      const bankBillIds: number[] = [];
+      const [bsy, bsm] = item.startDate.split('-').map(Number);
+      const [bey, bem] = item.endDate.split('-').map(Number);
+      const bTotalMonths = (bey - bsy) * 12 + (bem - bsm) + 1;
+      const bLabel = item.name ? `${item.type}: ${item.name}` : item.type;
+
+      setupDebts.push({
+        id: bankDebtId,
+        name: `🏦 ${bLabel}`,
+        amount: item.principal,
+        paid: false,
+        priority: 'high',
+        paidAmount: 0,
+        parts: bTotalMonths,
+        paidParts: 0,
+      });
+
+      for (let month = 0; month < 12; month++) {
+        const bBillId = bankBaseId + 1 + month;
+        bankBillIds.push(bBillId);
+        const bLastDay = new Date(currentYear, month + 1, 0).getDate();
+        const bActualDay = Math.min(item.paymentDay, bLastDay);
+        const bMonthStr = String(month + 1).padStart(2, '0');
+        const bDayStr = String(bActualDay).padStart(2, '0');
+        lombardBills.push({
+          id: bBillId,
+          name: `🏦 ${bLabel} %`,
+          amount: item.monthlyInterest,
+          date: '',
+          paid: false,
+          reset_month: month,
+          dueDate: `${currentYear}-${bMonthStr}-${bDayStr}`,
+        });
+      }
+
+      setupBankLoans.push({
+        id: bankBaseId + 100,
+        type: item.type,
+        name: item.name,
+        principal: item.principal,
+        monthlyInterest: item.monthlyInterest,
+        paymentDay: item.paymentDay,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        totalMonths: bTotalMonths,
+        debtId: bankDebtId,
+        billIds: bankBillIds,
+        active: true,
+        createdAt: today,
+      });
+    });
+
+    onComplete(finalProfile, [...bills, ...lombardBills], setupDebts, setupLombards, setupBankLoans);
   };
 
   // ვალიდაცია: შემდეგ ღილაკის ჩართვა
@@ -363,7 +461,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
         {step === 1 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
-              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 1/5</Badge>
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 1/6</Badge>
               <CardTitle className="text-2xl font-black">როგორ იღებ შემოსავალს?</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -437,7 +535,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
         {step === 2 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
-              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 2/5</Badge>
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 2/6</Badge>
               <CardTitle className="text-2xl font-black">
                 {profile.incomeType === 'salary' && 'ხელფასის დეტალები'}
                 {profile.incomeType === 'freelance' && 'გამომუშავების გეგმა'}
@@ -612,7 +710,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
         {step === 3 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
-              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 3/5</Badge>
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 3/6</Badge>
               <CardTitle className="text-2xl font-black">ყოველთვიური გადასახადი</CardTitle>
               <CardDescription>აირჩიე კატეგორია და დაამატე შენი ხარჯები</CardDescription>
             </CardHeader>
@@ -776,16 +874,137 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
           </Card>
         )}
 
-        {/* Step 4: ლობარდი */}
+        {/* Step 4: ბანკი */}
         {step === 4 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
-              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 4/5</Badge>
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 4/6</Badge>
+              <CardTitle className="text-2xl font-black flex items-center justify-center gap-2">
+                <Landmark className="w-6 h-6" /> ბანკი
+              </CardTitle>
+              <CardDescription>გაქვს სესხი, განვადება ან საკრედიტო ბარათი?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* დამატებული ბანკის პროდუქტები */}
+              {bankItems.length > 0 && (
+                <div className="space-y-1.5">
+                  {bankItems.map((item, idx) => {
+                    const typeInfo = BANK_PRODUCT_TYPES.find((t) => t.key === item.type);
+                    const months = bankMonthsBetween(item.startDate, item.endDate);
+                    return (
+                      <div key={idx} className="flex justify-between items-center p-2.5 rounded-lg border" style={{ borderColor: `${typeInfo?.color}40`, backgroundColor: `${typeInfo?.color}08` }}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">{typeInfo?.icon}</span>
+                          <div>
+                            <span className="font-bold text-sm" style={{ color: typeInfo?.color }}>{typeInfo?.label}</span>
+                            {item.name && <span className="text-[10px] text-muted-foreground ml-1">· {item.name}</span>}
+                            <div className="text-[10px] text-muted-foreground">
+                              ძირი: <span className="text-red-400 font-bold">{item.principal}₾</span>
+                              {' · '}%/თვე: <span className="text-orange-400 font-bold">{item.monthlyInterest}₾</span>
+                              {' · '}{months} თვე
+                            </div>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" onClick={() => removeBankItem(idx)}>
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ტიპის არჩევა */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">აირჩიე ტიპი:</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {BANK_PRODUCT_TYPES.map((type) => (
+                    <button
+                      key={type.key}
+                      type="button"
+                      onClick={() => setBankType(bankType === type.key ? null : type.key)}
+                      className={cn(
+                        'flex items-center gap-1.5 p-2.5 rounded-lg border-2 transition-all text-left',
+                        bankType === type.key ? 'scale-[1.02]' : 'border-border/50 opacity-60 hover:opacity-100'
+                      )}
+                      style={{
+                        borderColor: bankType === type.key ? type.color : undefined,
+                        backgroundColor: bankType === type.key ? `${type.color}15` : undefined,
+                      }}
+                    >
+                      <span className="text-lg">{type.icon}</span>
+                      <span className="text-[10px] font-bold" style={{ color: bankType === type.key ? type.color : undefined }}>{type.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ფორმა */}
+              {bankType && (
+                <div className="space-y-2 animate-fadeIn">
+                  <Input type="text" placeholder="დამატებითი სახელი (არასავალდ.)" value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-9 text-sm" />
+                  <div className="flex gap-2">
+                    <input type="text" inputMode="numeric" placeholder="ძირი თანხა ₾ *" value={bankPrincipal}
+                      onChange={(e) => setBankPrincipal(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="flex-1 h-10 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                    <input type="text" inputMode="numeric" placeholder="% თვეში ₾ *" value={bankInterest}
+                      onChange={(e) => setBankInterest(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="flex-1 h-10 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                    />
+                  </div>
+                  <input type="text" inputMode="numeric" placeholder="გადახდის დღე (1-31) *" value={bankPayDay}
+                    onChange={(e) => setBankPayDay(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="w-full h-10 rounded-lg border border-border bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring transition-colors"
+                  />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასაწყისი *</label>
+                      <Input type="month" value={bankStart} onChange={(e) => setBankStart(e.target.value)} className="h-9 text-sm" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[10px] text-muted-foreground mb-0.5 block">ვადის დასასრული *</label>
+                      <Input type="month" value={bankEnd} onChange={(e) => setBankEnd(e.target.value)} className="h-9 text-sm" />
+                    </div>
+                  </div>
+                  {bankStart && bankEnd && bankStart <= bankEnd && (
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      ვადა: <span className="font-bold text-slate-200">{bankMonthsBetween(bankStart, bankEnd)} თვე</span>
+                    </p>
+                  )}
+                  <Button onClick={addBankItem} className="w-full h-9" variant="default">
+                    <Plus className="w-4 h-4 mr-1.5" /> დამატება
+                  </Button>
+                </div>
+              )}
+
+              <div className="bg-blue-500/10 border border-blue-700/30 rounded-md p-2.5 text-[11px] text-blue-300 space-y-0.5">
+                <p>📌 ძირი თანხა ავტომატურად დაემატება <strong>ვალებში</strong> (კუბიკებით)</p>
+                <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong></p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" onClick={() => setStep(3)} className="flex-1">
+                  <ArrowLeft className="w-4 h-4 mr-2" /> უკან
+                </Button>
+                <Button onClick={() => setStep(5)} className="flex-[2]">
+                  {bankItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 5: ლობარდი */}
+        {step === 5 && (
+          <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
+            <CardHeader className="text-center">
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 5/6</Badge>
               <CardTitle className="text-2xl font-black">ლობარდი</CardTitle>
               <CardDescription>გაქვს ლობარდში ჩადებული ნივთი? დაამატე აქ</CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {/* დამატებული ლობარდები */}
               {lombardItems.length > 0 && (
                 <div className="space-y-1.5">
                   {lombardItems.map((item, idx) => (
@@ -794,9 +1013,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                         <Package className="h-4 w-4 text-amber-400" />
                         <div>
                           <span className="font-bold text-sm text-amber-200">{item.itemName}</span>
-                          {item.contractNumber && (
-                            <span className="text-[10px] text-amber-400/70 ml-1.5">#{item.contractNumber}</span>
-                          )}
+                          {item.contractNumber && <span className="text-[10px] text-amber-400/70 ml-1.5">#{item.contractNumber}</span>}
                           <div className="text-[10px] text-muted-foreground">
                             ძირი: <span className="text-red-400 font-bold">{item.principal}₾</span>
                             {' · '}%/თვე: <span className="text-orange-400 font-bold">{item.monthlyInterest}₾</span>
@@ -809,20 +1026,8 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                       </Button>
                     </div>
                   ))}
-                  <div className="text-right text-xs pt-1 space-y-0.5">
-                    <div>
-                      <span className="text-muted-foreground">სულ ძირი: </span>
-                      <span className="text-red-400 font-bold">{lombardItems.reduce((s, l) => s + l.principal, 0)}₾</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">ყოველთვიური %: </span>
-                      <span className="text-orange-400 font-bold">{lombardItems.reduce((s, l) => s + l.monthlyInterest, 0)}₾</span>
-                    </div>
-                  </div>
                 </div>
               )}
-
-              {/* ფორმა */}
               <div className="space-y-2">
                 <Input type="text" placeholder="ნივთის დასახელება *" value={lombItemName} onChange={(e) => setLombItemName(e.target.value)} className="h-9 text-sm" />
                 <div className="flex gap-2">
@@ -847,17 +1052,15 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                   <Plus className="w-4 h-4 mr-1.5" /> ლობარდის დამატება
                 </Button>
               </div>
-
               <div className="bg-amber-500/10 border border-amber-700/30 rounded-md p-2.5 text-[11px] text-amber-300 space-y-0.5">
                 <p>📌 ძირი თანხა ავტომატურად დაემატება <strong>ვალებში</strong></p>
                 <p>📌 ყოველთვიური პროცენტი დაემატება <strong>ყოველთვიურ გადასახადებში</strong> (12 თვე)</p>
               </div>
-
               <div className="flex gap-3 pt-2">
-                <Button variant="secondary" onClick={() => setStep(3)} className="flex-1">
+                <Button variant="secondary" onClick={() => setStep(4)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> უკან
                 </Button>
-                <Button onClick={() => setStep(5)} className="flex-[2]">
+                <Button onClick={() => setStep(6)} className="flex-[2]">
                   {lombardItems.length === 0 ? 'გამოტოვება' : 'შემდეგი'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
@@ -866,11 +1069,11 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
           </Card>
         )}
 
-        {/* Step 5: შეჯამება */}
-        {step === 5 && (
+        {/* Step 6: შეჯამება */}
+        {step === 6 && (
           <Card className="border-border/50 bg-card/80 backdrop-blur animate-fadeIn">
             <CardHeader className="text-center">
-              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 5/5</Badge>
+              <Badge variant="warning" className="mx-auto mb-2 uppercase tracking-wider text-xs">ნაბიჯი 6/6</Badge>
               <CardTitle className="text-2xl font-black">შეჯამება</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -950,6 +1153,27 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
                     </div>
                   )}
 
+                  {bankItems.length > 0 && (
+                    <div className="border-t border-border pt-2">
+                      <span className="text-muted-foreground text-sm flex items-center gap-1">
+                        <Landmark className="w-3.5 h-3.5" /> ბანკი:
+                      </span>
+                      {bankItems.map((item, idx) => {
+                        const typeInfo = BANK_PRODUCT_TYPES.find((t) => t.key === item.type);
+                        return (
+                          <div key={idx} className="flex justify-between text-sm mt-1">
+                            <span style={{ color: typeInfo?.color }}>{typeInfo?.icon} {typeInfo?.label}{item.name ? `: ${item.name}` : ''}</span>
+                            <span className="text-xs">
+                              <span className="text-red-400">{item.principal}₾</span>
+                              <span className="text-muted-foreground mx-1">+</span>
+                              <span className="text-orange-400">{item.monthlyInterest}₾/თვე</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {lombardItems.length > 0 && (
                     <div className="border-t border-border pt-2">
                       <span className="text-muted-foreground text-sm flex items-center gap-1">
@@ -994,7 +1218,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
               </div>
 
               <div className="flex gap-3 pt-2">
-                <Button variant="secondary" onClick={() => setStep(4)} className="flex-1">
+                <Button variant="secondary" onClick={() => setStep(5)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-2" /> უკან
                 </Button>
                 <Button onClick={handleFinish} size="lg" className="flex-[2] text-lg">
@@ -1009,7 +1233,7 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({ onComplete }) => {
         {/* პროგრეს ინდიკატორი */}
         {step > 0 && (
           <div className="flex justify-center gap-2 mt-8">
-            {[1, 2, 3, 4, 5].map((s) => (
+            {[1, 2, 3, 4, 5, 6].map((s) => (
               <div
                 key={s}
                 className={cn(

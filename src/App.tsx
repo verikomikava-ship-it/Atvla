@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { AppState, DayData, Debt, DebtPriority, UserProfile, Bill, Subscription, Loan, Lombard } from '@/types';
+import { AppState, DayData, Debt, DebtPriority, UserProfile, Bill, Subscription, Loan, Lombard, BankLoan, BankProductType } from '@/types';
 import { useAppState } from '@/hooks/useAppState';
 import { calculateStats } from '@/utils/calculations';
 import { MONTH_NAMES } from '@/utils/constants';
@@ -11,6 +11,7 @@ import { BillsManager } from '@/components/BillsManager';
 import { SubscriptionsManager } from '@/components/SubscriptionsManager';
 import { LoansManager } from '@/components/LoansManager';
 import { LombardsManager } from '@/components/LombardsManager';
+import { BankLoansManager } from '@/components/BankLoansManager';
 import { StatsView } from '@/components/StatsView';
 import { ToolsMenu } from '@/components/ToolsMenu';
 import { DiaryView } from '@/components/DiaryView';
@@ -23,19 +24,20 @@ export const App: React.FC = () => {
   const { state, updateState } = useAppState();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
-  const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'subscriptions' | 'loans' | 'lombards' | 'stats'>('debts');
+  const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'subscriptions' | 'loans' | 'lombards' | 'bank' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const stats = useMemo(() => calculateStats(state), [state]);
 
   const handleSetupComplete = useCallback(
-    (profile: UserProfile, bills: Bill[], setupDebts?: Debt[], setupLombards?: Lombard[]) => {
+    (profile: UserProfile, bills: Bill[], setupDebts?: Debt[], setupLombards?: Lombard[], setupBankLoans?: BankLoan[]) => {
       const newState: AppState = {
         ...state,
         profile,
         bills: [...state.bills, ...bills],
         debts: [...state.debts, ...(setupDebts || [])],
         lombards: [...(state.lombards || []), ...(setupLombards || [])],
+        bankLoans: [...(state.bankLoans || []), ...(setupBankLoans || [])],
       };
       updateState(newState);
     },
@@ -517,6 +519,125 @@ export const App: React.FC = () => {
     [state, updateState]
   );
 
+  // ბანკი
+  const handleAddBankLoan = useCallback(
+    (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; startDate: string; endDate: string }) => {
+      const now = Date.now();
+      const today = new Date().toISOString().split('T')[0];
+      const [sy, sm] = data.startDate.split('-').map(Number);
+      const [ey, em] = data.endDate.split('-').map(Number);
+      const totalMonths = (ey - sy) * 12 + (em - sm) + 1;
+
+      const typeLabel = data.type;
+      const label = data.name ? `${typeLabel}: ${data.name}` : typeLabel;
+
+      // ვალი (ძირი თანხა) — parts = totalMonths
+      const debtId = now;
+      const newDebt: Debt = {
+        id: debtId,
+        name: `🏦 ${label}`,
+        amount: data.principal,
+        paid: false,
+        priority: 'high',
+        paidAmount: 0,
+        parts: totalMonths,
+        paidParts: 0,
+      };
+
+      // ბილები (ყოველთვიური პროცენტი) — 12 თვეზე recurring
+      const billIds: number[] = [];
+      const newBills: Bill[] = [];
+      for (let month = 0; month < 12; month++) {
+        const billId = now + 1 + month;
+        billIds.push(billId);
+        const year = new Date().getFullYear();
+        const lastDay = new Date(year, month + 1, 0).getDate();
+        const actualDay = Math.min(data.paymentDay, lastDay);
+        const monthStr = String(month + 1).padStart(2, '0');
+        const dayStr = String(actualDay).padStart(2, '0');
+        newBills.push({
+          id: billId,
+          name: `🏦 ${label} %`,
+          amount: data.monthlyInterest,
+          date: '',
+          paid: false,
+          reset_month: month,
+          dueDate: `${year}-${monthStr}-${dayStr}`,
+        });
+      }
+
+      const bankLoan: BankLoan = {
+        id: now + 100,
+        type: data.type,
+        name: data.name,
+        principal: data.principal,
+        monthlyInterest: data.monthlyInterest,
+        paymentDay: data.paymentDay,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        totalMonths,
+        debtId,
+        billIds,
+        active: true,
+        createdAt: today,
+      };
+
+      updateState({
+        ...state,
+        debts: [...state.debts, newDebt],
+        bills: [...state.bills, ...newBills],
+        bankLoans: [...(state.bankLoans || []), bankLoan],
+      });
+    },
+    [state, updateState]
+  );
+
+  const handleRemoveBankLoan = useCallback(
+    (id: number) => {
+      const loan = (state.bankLoans || []).find((l) => l.id === id);
+      if (!loan) return;
+      updateState({
+        ...state,
+        debts: state.debts.filter((d) => d.id !== loan.debtId),
+        bills: state.bills.filter((b) => !loan.billIds.includes(b.id)),
+        bankLoans: (state.bankLoans || []).filter((l) => l.id !== id),
+      });
+    },
+    [state, updateState]
+  );
+
+  const handleEditBankLoan = useCallback(
+    (id: number, updates: Partial<BankLoan>) => {
+      const loan = (state.bankLoans || []).find((l) => l.id === id);
+      if (!loan) return;
+
+      let updatedDebts = state.debts;
+      let updatedBills = state.bills;
+      const newName = updates.name !== undefined ? updates.name : loan.name;
+      const label = newName ? `${loan.type}: ${newName}` : loan.type;
+
+      if (updates.principal !== undefined || updates.name !== undefined) {
+        updatedDebts = state.debts.map((d) =>
+          d.id === loan.debtId ? { ...d, amount: updates.principal ?? loan.principal, name: `🏦 ${label}` } : d
+        );
+      }
+      if (updates.monthlyInterest !== undefined || updates.name !== undefined) {
+        updatedBills = state.bills.map((b) => {
+          if (!loan.billIds.includes(b.id)) return b;
+          return { ...b, amount: updates.monthlyInterest ?? loan.monthlyInterest, name: `🏦 ${label} %` };
+        });
+      }
+
+      updateState({
+        ...state,
+        debts: updatedDebts,
+        bills: updatedBills,
+        bankLoans: (state.bankLoans || []).map((l) => l.id === id ? { ...l, ...updates } : l),
+      });
+    },
+    [state, updateState]
+  );
+
   const handleResetData = useCallback(() => {
     const emptyState: AppState = {
       db: {},
@@ -525,6 +646,7 @@ export const App: React.FC = () => {
       subscriptions: [],
       loans: [],
       lombards: [],
+      bankLoans: [],
       goal: 0,
       goalName: '',
       profile: {
@@ -553,8 +675,9 @@ export const App: React.FC = () => {
     { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄' },
   ];
   const tabsRow2 = [
-    { key: 'loans' as const, label: 'გასესხებული', icon: '🤝' },
+    { key: 'bank' as const, label: 'ბანკი', icon: '🏦' },
     { key: 'lombards' as const, label: 'ლობარდი', icon: '🏪' },
+    { key: 'loans' as const, label: 'გასესხებული', icon: '🤝' },
     { key: 'stats' as const, label: 'სტატისტიკა', icon: '📊' },
   ];
 
@@ -711,6 +834,15 @@ export const App: React.FC = () => {
               onRemoveLoan={handleRemoveLoan}
               onToggleLoanReturned={handleToggleLoanReturned}
               onEditLoan={handleEditLoan}
+            />
+          )}
+
+          {activeTab === 'bank' && (
+            <BankLoansManager
+              state={state}
+              onAddBankLoan={handleAddBankLoan}
+              onRemoveBankLoan={handleRemoveBankLoan}
+              onEditBankLoan={handleEditBankLoan}
             />
           )}
 

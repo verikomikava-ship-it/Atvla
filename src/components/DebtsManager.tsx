@@ -344,18 +344,45 @@ export const DebtsManager: React.FC<DebtsManagerProps> = ({
                   value={progress}
                   indicatorClassName={PRIORITY_INDICATOR_CLASS[p]}
                 />
-                {/* ნაწილების ინდიკატორები */}
-                <div className="flex gap-1 mt-1.5">
-                  {Array.from({ length: totalParts }, (_, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        'flex-1 h-1.5 rounded-full transition-all duration-300',
-                        i < currentPaidParts ? PRIORITY_INDICATOR_CLASS[p] : 'bg-slate-700'
-                      )}
-                    />
-                  ))}
-                </div>
+                {/* ნაწილების ინდიკატორები — მრავალ ხაზი თუ ბევრია */}
+                {totalParts <= 36 ? (
+                  (() => {
+                    const perRow = totalParts <= 12 ? totalParts : 12;
+                    const rows: number[][] = [];
+                    for (let i = 0; i < totalParts; i += perRow) {
+                      rows.push(Array.from({ length: Math.min(perRow, totalParts - i) }, (_, j) => i + j));
+                    }
+                    return (
+                      <div className="space-y-0.5 mt-1.5">
+                        {rows.map((row, ri) => (
+                          <div key={ri} className="flex gap-0.5">
+                            {row.map((idx) => (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  'flex-1 h-1.5 rounded-sm transition-all duration-300',
+                                  idx < currentPaidParts ? PRIORITY_INDICATOR_CLASS[p] : 'bg-slate-700'
+                                )}
+                              />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div className="flex gap-1 mt-1.5">
+                    {Array.from({ length: totalParts }, (_, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          'flex-1 h-1.5 rounded-full transition-all duration-300',
+                          i < currentPaidParts ? PRIORITY_INDICATOR_CLASS[p] : 'bg-slate-700'
+                        )}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
