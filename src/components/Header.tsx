@@ -16,7 +16,7 @@ import {
   Wallet,
   Settings2,
 } from 'lucide-react';
-import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface HeaderProps {
   state: AppState;
@@ -350,7 +350,7 @@ export const Header: React.FC<HeaderProps> = ({
 
       <BillAlerts bills={state.bills} debts={state.debts} subscriptions={state.subscriptions || []} />
 
-      {/* შემოსავალი / გასავალი — Recharts Radial */}
+      {/* შემოსავალი / გასავალი — Pie Charts */}
       <div className="grid grid-cols-2 gap-2">
         {/* შემოსავალი */}
         <Card className="border-0 bg-emerald-50 dark:bg-emerald-900/20">
@@ -358,46 +358,44 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1 mb-1">
               <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">შემოსავალი</span>
-              <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 ml-auto">{totalInc}₾</span>
             </div>
             {totalInc > 0 ? (
-              <div style={{ width: '100%', height: 120 }}>
+              <div style={{ width: '100%', height: 140 }} className="relative">
                 <ResponsiveContainer>
-                  <RadialBarChart
-                    cx="50%" cy="50%"
-                    innerRadius="20%" outerRadius="95%"
-                    startAngle={210} endAngle={-30}
-                    data={[...incomeBreakdown].reverse().map((d) => ({ ...d, fill: d.color }))}
-                    barSize={Math.max(6, Math.min(14, 60 / incomeBreakdown.length))}
-                  >
-                    <PolarAngleAxis type="number" domain={[0, Math.max(...incomeBreakdown.map((d) => d.value))]} tick={false} angleAxisId={0} />
-                    <RadialBar
+                  <PieChart>
+                    <Pie
+                      data={incomeBreakdown.filter((d) => d.value > 0)}
+                      cx="50%" cy="50%"
+                      innerRadius="45%"
+                      outerRadius="90%"
+                      paddingAngle={2}
                       dataKey="value"
-                      cornerRadius={6}
-                      background={{ fill: 'rgba(0,0,0,0.06)' }}
-                      angleAxisId={0}
+                      strokeWidth={0}
                       isAnimationActive={true}
                       animationDuration={800}
                     >
-                      {[...incomeBreakdown].reverse().map((entry, i) => (
+                      {incomeBreakdown.filter((d) => d.value > 0).map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
-                    </RadialBar>
+                    </Pie>
                     <Tooltip
                       formatter={(val) => [`${val}₾`, '']}
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.label || ''}
                       contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
                     />
-                  </RadialBarChart>
+                  </PieChart>
                 </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-lg font-black text-emerald-700 dark:text-emerald-300">{totalInc}₾</span>
+                </div>
               </div>
             ) : (
-              <p className="text-center text-[10px] text-muted-foreground py-6">მონაცემები არ არის</p>
+              <p className="text-center text-[10px] text-muted-foreground py-8">მონაცემები არ არის</p>
             )}
-            <div className="space-y-0.5 mt-1">
+            <div className="space-y-0.5">
               {incomeBreakdown.filter((d) => d.value > 0).map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-[10px]">
-                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
                   <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.value}₾</span>
                   <span className="text-slate-400 dark:text-slate-500 shrink-0 w-7 text-right">{item.percent}%</span>
@@ -413,46 +411,44 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-1 mb-1">
               <TrendingDown className="h-3 w-3 text-red-500" />
               <span className="text-[11px] font-bold text-red-600 dark:text-red-400">გასავალი</span>
-              <span className="text-sm font-black text-red-600 dark:text-red-400 ml-auto">{totalExp}₾</span>
             </div>
             {totalExp > 0 ? (
-              <div style={{ width: '100%', height: 120 }}>
+              <div style={{ width: '100%', height: 140 }} className="relative">
                 <ResponsiveContainer>
-                  <RadialBarChart
-                    cx="50%" cy="50%"
-                    innerRadius="20%" outerRadius="95%"
-                    startAngle={210} endAngle={-30}
-                    data={[...expenseBreakdown].reverse().map((d) => ({ ...d, fill: d.color }))}
-                    barSize={Math.max(6, Math.min(14, 60 / expenseBreakdown.length))}
-                  >
-                    <PolarAngleAxis type="number" domain={[0, Math.max(...expenseBreakdown.map((d) => d.value))]} tick={false} angleAxisId={0} />
-                    <RadialBar
+                  <PieChart>
+                    <Pie
+                      data={expenseBreakdown.filter((d) => d.value > 0)}
+                      cx="50%" cy="50%"
+                      innerRadius="45%"
+                      outerRadius="90%"
+                      paddingAngle={2}
                       dataKey="value"
-                      cornerRadius={6}
-                      background={{ fill: 'rgba(0,0,0,0.06)' }}
-                      angleAxisId={0}
+                      strokeWidth={0}
                       isAnimationActive={true}
                       animationDuration={800}
                     >
-                      {[...expenseBreakdown].reverse().map((entry, i) => (
+                      {expenseBreakdown.filter((d) => d.value > 0).map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
-                    </RadialBar>
+                    </Pie>
                     <Tooltip
                       formatter={(val) => [`${val}₾`, '']}
                       labelFormatter={(_, payload) => payload?.[0]?.payload?.label || ''}
                       contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
                     />
-                  </RadialBarChart>
+                  </PieChart>
                 </ResponsiveContainer>
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="text-lg font-black text-red-600 dark:text-red-400">{totalExp}₾</span>
+                </div>
               </div>
             ) : (
-              <p className="text-center text-[10px] text-muted-foreground py-6">მონაცემები არ არის</p>
+              <p className="text-center text-[10px] text-muted-foreground py-8">მონაცემები არ არის</p>
             )}
-            <div className="space-y-0.5 mt-1 max-h-[80px] overflow-y-auto">
+            <div className="space-y-0.5 max-h-[80px] overflow-y-auto">
               {expenseBreakdown.filter((d) => d.value > 0).map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-[10px]">
-                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
                   <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.value}₾</span>
                   <span className="text-slate-400 dark:text-slate-500 shrink-0 w-7 text-right">{item.percent}%</span>
