@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
     return items;
   }, [state.db, selectedMonth, currentMonth]);
 
-  // გასავლის დაყოფა
+  // გასავლის დაყოფა (კალენდარი + ბილები + გამოწერები + ვალები)
   const expenseBreakdown = useMemo(() => {
     type ChartItem = { label: string; value: number; percent: number; color: string };
     const monthDays = Object.entries(state.db).filter(([date]) => {
@@ -89,15 +89,42 @@ export const Header: React.FC<HeaderProps> = ({
       return selectedMonth === '' || m === currentMonth;
     });
 
-    const bySubcategory: Record<string, number> = {};
+    const groups: Record<string, { value: number; color: string; icon: string }> = {};
+
+    // 1. კალენდრიდან ხარჯები (subcategory-ით)
     for (const [, day] of monthDays) {
       for (const exp of day.expenses || []) {
         const sub = exp.subcategory || 'სხვა';
-        bySubcategory[sub] = (bySubcategory[sub] || 0) + exp.amount;
+        if (!groups[sub]) {
+          const info = SUBCATEGORIES[sub as ExpenseSubcategory];
+          groups[sub] = { value: 0, color: '#64748b', icon: info?.icon || '📝' };
+        }
+        groups[sub].value += exp.amount;
       }
     }
 
-    const total = Object.values(bySubcategory).reduce((s, v) => s + v, 0);
+    // 2. ყოველთვიური გადასახადები (bills)
+    const paidBills = state.bills.filter((b) => b.paid);
+    const billsTotal = paidBills.reduce((s, b) => s + (+b.amount || 0), 0);
+    if (billsTotal > 0) {
+      groups['ყოველთვიური'] = { value: billsTotal, color: '#0891b2', icon: '📅' };
+    }
+
+    // 3. გამოწერები (subscriptions)
+    const paidSubs = (state.subscriptions || []).filter((s) => s.paid);
+    const subsTotal = paidSubs.reduce((s, sub) => s + (+sub.amount || 0), 0);
+    if (subsTotal > 0) {
+      groups['გამოწერები'] = { value: subsTotal, color: '#8b5cf6', icon: '🔄' };
+    }
+
+    // 4. ვალები (debts)
+    const paidDebts = state.debts.filter((d) => d.paid);
+    const debtsTotal = paidDebts.reduce((s, d) => s + (+d.amount || 0), 0);
+    if (debtsTotal > 0) {
+      groups['ვალები'] = { value: debtsTotal, color: '#ef4444', icon: '💸' };
+    }
+
+    const total = Object.values(groups).reduce((s, g) => s + g.value, 0);
     if (total === 0) return [{ label: 'მონაცემები არ არის', value: 0, percent: 100, color: '#d1d5db' }] as ChartItem[];
 
     const subColors: Record<string, string> = {
@@ -108,28 +135,29 @@ export const Header: React.FC<HeaderProps> = ({
       'ტანისამოსი': '#e11d48', 'ტექნიკა': '#6366f1', 'სახლი': '#0ea5e9',
       'საჩუქარი': '#f43f5e', 'სილამაზე': '#d946ef', 'სპორტი': '#22c55e',
       'შინაური ცხოველი': '#a3e635', 'ვალის გადახდა': '#78716c',
-      'ყოველთვიური გადასახადი': '#0891b2', 'სხვა': '#64748b',
+      'ყოველთვიური': '#0891b2', 'გამოწერები': '#8b5cf6', 'ვალები': '#ef4444',
+      'სხვა': '#64748b',
     };
 
-    const allItems = Object.entries(bySubcategory)
-      .sort((a, b) => b[1] - a[1])
-      .map(([sub, val]) => {
-        const info = SUBCATEGORIES[sub as ExpenseSubcategory];
+    const allItems = Object.entries(groups)
+      .sort((a, b) => b[1].value - a[1].value)
+      .map(([key, g]) => {
+        const info = SUBCATEGORIES[key as ExpenseSubcategory];
         return {
-          label: info ? `${info.icon} ${info.label}` : sub,
-          value: val,
-          percent: Math.round((val / total) * 100),
-          color: subColors[sub] || '#64748b',
+          label: info ? `${info.icon} ${info.label}` : `${g.icon} ${key}`,
+          value: g.value,
+          percent: Math.round((g.value / total) * 100),
+          color: subColors[key] || g.color,
         };
       });
 
-    // max 6 rings, group rest as "სხვა"
+    // max 6 rings, group rest
     if (allItems.length <= 6) return allItems;
     const top = allItems.slice(0, 5);
     const restVal = allItems.slice(5).reduce((s, d) => s + d.value, 0);
     top.push({ label: '📝 დანარჩენი', value: restVal, percent: Math.round((restVal / total) * 100), color: '#94a3b8' });
     return top;
-  }, [state.db, selectedMonth, currentMonth]);
+  }, [state.db, state.bills, state.debts, state.subscriptions, selectedMonth, currentMonth]);
 
   const [isEditingGoal, setIsEditingGoal] = useState(false);
   const [goalInput, setGoalInput] = useState('');
