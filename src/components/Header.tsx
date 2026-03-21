@@ -16,60 +16,7 @@ import {
   Wallet,
   Settings2,
 } from 'lucide-react';
-
-// Radial Bar Chart — concentric rings
-type ChartItem = { label: string; value: number; percent: number; color: string };
-const RadialChart: React.FC<{ data: ChartItem[]; size: number }> = ({ data, size }) => {
-  const cx = size / 2;
-  const cy = size / 2;
-  const maxR = size / 2 - 3;
-  const sorted = [...data].filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
-
-  if (sorted.length === 0) {
-    return (
-      <svg width={size} height={size} className="shrink-0">
-        <circle cx={cx} cy={cy} r={maxR * 0.6} fill="none" stroke="currentColor" strokeWidth={6} className="text-slate-200 dark:text-slate-700" />
-      </svg>
-    );
-  }
-
-  const count = sorted.length;
-  const ringWidth = Math.min(12, Math.max(6, (maxR - 6) / count - 1.5));
-  const gap = 2;
-  const maxVal = sorted[0].value;
-  const maxAngle = 310;
-  const startAngle = -215;
-
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const arcPath = (r: number, sDeg: number, eDeg: number) => {
-    const s = toRad(sDeg);
-    const e = toRad(eDeg);
-    const large = eDeg - sDeg > 180 ? 1 : 0;
-    return `M${cx + r * Math.cos(s)},${cy + r * Math.sin(s)} A${r},${r} 0 ${large} 1 ${cx + r * Math.cos(e)},${cy + r * Math.sin(e)}`;
-  };
-
-  return (
-    <svg width={size} height={size} className="shrink-0">
-      {sorted.map((item, i) => {
-        const r = maxR - i * (ringWidth + gap);
-        const angle = Math.max(8, (item.value / maxVal) * maxAngle);
-        return (
-          <g key={i}>
-            <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={ringWidth} strokeOpacity={0.08} className="text-slate-500 dark:text-slate-400" />
-            <path
-              d={arcPath(r, startAngle, startAngle + angle)}
-              fill="none"
-              stroke={item.color}
-              strokeWidth={ringWidth}
-              strokeLinecap="round"
-              className="transition-all duration-500"
-            />
-          </g>
-        );
-      })}
-    </svg>
-  );
-};
+import { RadialBarChart, RadialBar, PolarAngleAxis, ResponsiveContainer, Tooltip, Cell } from 'recharts';
 
 interface HeaderProps {
   state: AppState;
@@ -403,21 +350,52 @@ export const Header: React.FC<HeaderProps> = ({
 
       <BillAlerts bills={state.bills} debts={state.debts} subscriptions={state.subscriptions || []} />
 
-      {/* შემოსავალი / გასავალი — Radial Charts */}
+      {/* შემოსავალი / გასავალი — Recharts Radial */}
       <div className="grid grid-cols-2 gap-2">
         {/* შემოსავალი */}
         <Card className="border-0 bg-emerald-50 dark:bg-emerald-900/20">
           <CardContent className="p-2.5">
-            <div className="flex items-center gap-1 mb-1.5">
+            <div className="flex items-center gap-1 mb-1">
               <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">შემოსავალი</span>
               <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 ml-auto">{totalInc}₾</span>
             </div>
-            <div className="flex justify-center mb-1.5">
-              <RadialChart data={incomeBreakdown} size={100} />
-            </div>
-            <div className="space-y-0.5">
-              {incomeBreakdown.map((item, i) => (
+            {totalInc > 0 ? (
+              <div style={{ width: '100%', height: 120 }}>
+                <ResponsiveContainer>
+                  <RadialBarChart
+                    cx="50%" cy="50%"
+                    innerRadius="20%" outerRadius="95%"
+                    startAngle={210} endAngle={-30}
+                    data={[...incomeBreakdown].reverse().map((d) => ({ ...d, fill: d.color }))}
+                    barSize={Math.max(6, Math.min(14, 60 / incomeBreakdown.length))}
+                  >
+                    <PolarAngleAxis type="number" domain={[0, Math.max(...incomeBreakdown.map((d) => d.value))]} tick={false} angleAxisId={0} />
+                    <RadialBar
+                      dataKey="value"
+                      cornerRadius={6}
+                      background={{ fill: 'rgba(0,0,0,0.06)' }}
+                      angleAxisId={0}
+                      isAnimationActive={true}
+                      animationDuration={800}
+                    >
+                      {[...incomeBreakdown].reverse().map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </RadialBar>
+                    <Tooltip
+                      formatter={(val) => [`${val}₾`, '']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.label || ''}
+                      contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                    />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-[10px] text-muted-foreground py-6">მონაცემები არ არის</p>
+            )}
+            <div className="space-y-0.5 mt-1">
+              {incomeBreakdown.filter((d) => d.value > 0).map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-[10px]">
                   <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
@@ -432,16 +410,47 @@ export const Header: React.FC<HeaderProps> = ({
         {/* გასავალი */}
         <Card className="border-0 bg-red-50 dark:bg-red-900/20">
           <CardContent className="p-2.5">
-            <div className="flex items-center gap-1 mb-1.5">
+            <div className="flex items-center gap-1 mb-1">
               <TrendingDown className="h-3 w-3 text-red-500" />
               <span className="text-[11px] font-bold text-red-600 dark:text-red-400">გასავალი</span>
               <span className="text-sm font-black text-red-600 dark:text-red-400 ml-auto">{totalExp}₾</span>
             </div>
-            <div className="flex justify-center mb-1.5">
-              <RadialChart data={expenseBreakdown} size={100} />
-            </div>
-            <div className="space-y-0.5 max-h-[100px] overflow-y-auto">
-              {expenseBreakdown.map((item, i) => (
+            {totalExp > 0 ? (
+              <div style={{ width: '100%', height: 120 }}>
+                <ResponsiveContainer>
+                  <RadialBarChart
+                    cx="50%" cy="50%"
+                    innerRadius="20%" outerRadius="95%"
+                    startAngle={210} endAngle={-30}
+                    data={[...expenseBreakdown].reverse().map((d) => ({ ...d, fill: d.color }))}
+                    barSize={Math.max(6, Math.min(14, 60 / expenseBreakdown.length))}
+                  >
+                    <PolarAngleAxis type="number" domain={[0, Math.max(...expenseBreakdown.map((d) => d.value))]} tick={false} angleAxisId={0} />
+                    <RadialBar
+                      dataKey="value"
+                      cornerRadius={6}
+                      background={{ fill: 'rgba(0,0,0,0.06)' }}
+                      angleAxisId={0}
+                      isAnimationActive={true}
+                      animationDuration={800}
+                    >
+                      {[...expenseBreakdown].reverse().map((entry, i) => (
+                        <Cell key={i} fill={entry.color} />
+                      ))}
+                    </RadialBar>
+                    <Tooltip
+                      formatter={(val) => [`${val}₾`, '']}
+                      labelFormatter={(_, payload) => payload?.[0]?.payload?.label || ''}
+                      contentStyle={{ fontSize: 11, borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                    />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p className="text-center text-[10px] text-muted-foreground py-6">მონაცემები არ არის</p>
+            )}
+            <div className="space-y-0.5 mt-1 max-h-[80px] overflow-y-auto">
+              {expenseBreakdown.filter((d) => d.value > 0).map((item, i) => (
                 <div key={i} className="flex items-center gap-1.5 text-[10px]">
                   <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
                   <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>

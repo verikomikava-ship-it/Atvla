@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Stu/OneDrive/Desktop/ragaca/Atvla/**)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)"
+    ]
+  }
+}
