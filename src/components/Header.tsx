@@ -17,57 +17,54 @@ import {
   Settings2,
 } from 'lucide-react';
 
-// SVG Donut Chart
-const DonutChart: React.FC<{ data: { label: string; value: number; percent: number; color: string }[]; size: number }> = ({ data, size }) => {
+// Radial Bar Chart — concentric rings
+type ChartItem = { label: string; value: number; percent: number; color: string };
+const RadialChart: React.FC<{ data: ChartItem[]; size: number }> = ({ data, size }) => {
   const cx = size / 2;
   const cy = size / 2;
-  const r = size / 2 - 4;
-  const innerR = r * 0.55;
-  const total = data.reduce((s, d) => s + d.value, 0);
+  const maxR = size / 2 - 3;
+  const sorted = [...data].filter((d) => d.value > 0).sort((a, b) => b.value - a.value);
 
-  if (total === 0) {
+  if (sorted.length === 0) {
     return (
       <svg width={size} height={size} className="shrink-0">
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={r - innerR} className="text-slate-200 dark:text-slate-700" />
+        <circle cx={cx} cy={cy} r={maxR * 0.6} fill="none" stroke="currentColor" strokeWidth={6} className="text-slate-200 dark:text-slate-700" />
       </svg>
     );
   }
 
-  let cumAngle = -90; // start from top
-  const segments = data.map((d) => {
-    const angle = (d.value / total) * 360;
-    const startAngle = cumAngle;
-    cumAngle += angle;
-    return { ...d, startAngle, angle };
-  });
+  const count = sorted.length;
+  const ringWidth = Math.min(12, Math.max(6, (maxR - 6) / count - 1.5));
+  const gap = 2;
+  const maxVal = sorted[0].value;
+  const maxAngle = 310;
+  const startAngle = -215;
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const arcPath = (startDeg: number, endDeg: number, outerR: number, iR: number) => {
-    const s1 = toRad(startDeg);
-    const e1 = toRad(endDeg);
-    const largeArc = endDeg - startDeg > 180 ? 1 : 0;
-    const x1 = cx + outerR * Math.cos(s1);
-    const y1 = cy + outerR * Math.sin(s1);
-    const x2 = cx + outerR * Math.cos(e1);
-    const y2 = cy + outerR * Math.sin(e1);
-    const x3 = cx + iR * Math.cos(e1);
-    const y3 = cy + iR * Math.sin(e1);
-    const x4 = cx + iR * Math.cos(s1);
-    const y4 = cy + iR * Math.sin(s1);
-    return `M${x1},${y1} A${outerR},${outerR} 0 ${largeArc} 1 ${x2},${y2} L${x3},${y3} A${iR},${iR} 0 ${largeArc} 0 ${x4},${y4} Z`;
+  const arcPath = (r: number, sDeg: number, eDeg: number) => {
+    const s = toRad(sDeg);
+    const e = toRad(eDeg);
+    const large = eDeg - sDeg > 180 ? 1 : 0;
+    return `M${cx + r * Math.cos(s)},${cy + r * Math.sin(s)} A${r},${r} 0 ${large} 1 ${cx + r * Math.cos(e)},${cy + r * Math.sin(e)}`;
   };
 
   return (
     <svg width={size} height={size} className="shrink-0">
-      {segments.map((seg, i) => {
-        const gap = segments.length > 1 ? 0.8 : 0;
+      {sorted.map((item, i) => {
+        const r = maxR - i * (ringWidth + gap);
+        const angle = Math.max(8, (item.value / maxVal) * maxAngle);
         return (
-          <path
-            key={i}
-            d={arcPath(seg.startAngle + gap, seg.startAngle + seg.angle - gap, r, innerR)}
-            fill={seg.color}
-            className="transition-all duration-300"
-          />
+          <g key={i}>
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke="currentColor" strokeWidth={ringWidth} strokeOpacity={0.08} className="text-slate-500 dark:text-slate-400" />
+            <path
+              d={arcPath(r, startAngle, startAngle + angle)}
+              fill="none"
+              stroke={item.color}
+              strokeWidth={ringWidth}
+              strokeLinecap="round"
+              className="transition-all duration-500"
+            />
+          </g>
         );
       })}
     </svg>
@@ -167,7 +164,7 @@ export const Header: React.FC<HeaderProps> = ({
       'ყოველთვიური გადასახადი': '#0891b2', 'სხვა': '#64748b',
     };
 
-    const items: ChartItem[] = Object.entries(bySubcategory)
+    const allItems = Object.entries(bySubcategory)
       .sort((a, b) => b[1] - a[1])
       .map(([sub, val]) => {
         const info = SUBCATEGORIES[sub as ExpenseSubcategory];
@@ -179,7 +176,12 @@ export const Header: React.FC<HeaderProps> = ({
         };
       });
 
-    return items;
+    // max 6 rings, group rest as "სხვა"
+    if (allItems.length <= 6) return allItems;
+    const top = allItems.slice(0, 5);
+    const restVal = allItems.slice(5).reduce((s, d) => s + d.value, 0);
+    top.push({ label: '📝 დანარჩენი', value: restVal, percent: Math.round((restVal / total) * 100), color: '#94a3b8' });
+    return top;
   }, [state.db, selectedMonth, currentMonth]);
 
   const [isEditingGoal, setIsEditingGoal] = useState(false);
@@ -401,50 +403,52 @@ export const Header: React.FC<HeaderProps> = ({
 
       <BillAlerts bills={state.bills} debts={state.debts} subscriptions={state.subscriptions || []} />
 
-      {/* შემოსავალი / გასავალი — Donut Charts */}
+      {/* შემოსავალი / გასავალი — Radial Charts */}
       <div className="grid grid-cols-2 gap-2">
         {/* შემოსავალი */}
         <Card className="border-0 bg-emerald-50 dark:bg-emerald-900/20">
-          <CardContent className="p-2">
-            <div className="flex items-center gap-1 mb-1">
+          <CardContent className="p-2.5">
+            <div className="flex items-center gap-1 mb-1.5">
               <TrendingUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
               <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300">შემოსავალი</span>
-              <span className="text-xs font-black text-emerald-700 dark:text-emerald-300 ml-auto">{totalInc}₾</span>
+              <span className="text-sm font-black text-emerald-700 dark:text-emerald-300 ml-auto">{totalInc}₾</span>
             </div>
-            <div className="flex items-center gap-2">
-              <DonutChart data={incomeBreakdown} size={72} />
-              <div className="flex-1 space-y-0.5">
-                {incomeBreakdown.map((item, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[10px]">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.percent}%</span>
-                  </div>
-                ))}
-              </div>
+            <div className="flex justify-center mb-1.5">
+              <RadialChart data={incomeBreakdown} size={100} />
+            </div>
+            <div className="space-y-0.5">
+              {incomeBreakdown.map((item, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.value}₾</span>
+                  <span className="text-slate-400 dark:text-slate-500 shrink-0 w-7 text-right">{item.percent}%</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
 
         {/* გასავალი */}
         <Card className="border-0 bg-red-50 dark:bg-red-900/20">
-          <CardContent className="p-2">
-            <div className="flex items-center gap-1 mb-1">
+          <CardContent className="p-2.5">
+            <div className="flex items-center gap-1 mb-1.5">
               <TrendingDown className="h-3 w-3 text-red-500" />
               <span className="text-[11px] font-bold text-red-600 dark:text-red-400">გასავალი</span>
-              <span className="text-xs font-black text-red-600 dark:text-red-400 ml-auto">{totalExp}₾</span>
+              <span className="text-sm font-black text-red-600 dark:text-red-400 ml-auto">{totalExp}₾</span>
             </div>
-            <div className="flex items-center gap-2">
-              <DonutChart data={expenseBreakdown} size={72} />
-              <div className="flex-1 space-y-0.5 max-h-[90px] overflow-y-auto">
-                {expenseBreakdown.map((item, i) => (
-                  <div key={i} className="flex items-center gap-1 text-[10px]">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
-                    <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.percent}%</span>
-                  </div>
-                ))}
-              </div>
+            <div className="flex justify-center mb-1.5">
+              <RadialChart data={expenseBreakdown} size={100} />
+            </div>
+            <div className="space-y-0.5 max-h-[100px] overflow-y-auto">
+              {expenseBreakdown.map((item, i) => (
+                <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                  <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: item.color }} />
+                  <span className="text-slate-600 dark:text-slate-400 truncate flex-1">{item.label}</span>
+                  <span className="font-bold text-slate-700 dark:text-slate-300 shrink-0">{item.value}₾</span>
+                  <span className="text-slate-400 dark:text-slate-500 shrink-0 w-7 text-right">{item.percent}%</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
