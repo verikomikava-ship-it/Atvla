@@ -381,7 +381,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
   const dailyPlan: DailyPlanEntry[] = date ? getDailyPlan(state, date) : [];
   const dailyPlanTotal = dailyPlan.reduce((s, p) => s + p.dailyAmount, 0);
 
-  const toggleDailyPlanItem = (entry: DailyPlanEntry) => {
+  const toggleDailyPlanItem = (entry: DailyPlanEntry, payFull?: boolean) => {
     setFormData((prev) => {
       const existing = prev.dailyPlanDone || [];
       const found = existing.find(
@@ -396,12 +396,13 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
           ),
         };
       } else {
-        // დამატება
+        // დამატება — დღიური ან სრული თანხა
+        const amount = payFull ? entry.remaining : entry.dailyAmount;
         return {
           ...prev,
           dailyPlanDone: [
             ...existing,
-            { targetId: entry.targetId, targetType: entry.targetType, amount: entry.dailyAmount },
+            { targetId: entry.targetId, targetType: entry.targetType, amount },
           ],
         };
       }
@@ -888,46 +889,68 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
               <div className="p-1.5 space-y-1">
                 {dailyPlan.map((entry) => {
                   const checked = isDailyPlanChecked(entry);
+                  const savedItem = (formData.dailyPlanDone || []).find(
+                    (d) => d.targetId === entry.targetId && d.targetType === entry.targetType
+                  );
+                  const savedAmount = savedItem?.amount || 0;
+                  const isPaidFull = checked && savedAmount >= entry.remaining;
                   const typeColors: Record<string, string> = {
                     bill: 'border-cyan-400 bg-cyan-50 dark:bg-cyan-900/20',
                     debt: 'border-red-400 bg-red-50 dark:bg-red-900/20',
                     subscription: 'border-violet-400 bg-violet-50 dark:bg-violet-900/20',
                   };
                   return (
-                    <button
+                    <div
                       key={`${entry.targetType}-${entry.targetId}`}
-                      type="button"
-                      onClick={() => toggleDailyPlanItem(entry)}
                       className={cn(
-                        'w-full flex items-center gap-2 px-2 py-1.5 rounded-xl border transition-all text-left',
+                        'flex items-center gap-1 px-2 py-1.5 rounded-xl border transition-all',
                         checked
                           ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 opacity-60'
                           : typeColors[entry.targetType] || 'border-slate-200 bg-white dark:bg-slate-800'
                       )}
                     >
-                      <div className={cn(
-                        'w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all',
-                        checked ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'
-                      )}>
-                        {checked && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                      <span className="text-xs">{entry.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn('text-[11px] font-bold truncate', checked && 'line-through text-muted-foreground')}>
-                          {entry.name}
-                        </p>
-                        <p className="text-[9px] text-muted-foreground">
-                          {entry.daysLeft} დღე დარჩა · {entry.alreadySaved > 0 && `${entry.alreadySaved}₾ გადადებულია · `}
-                          {entry.remaining}₾ სულ
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={cn('text-sm font-black', checked ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-700 dark:text-indigo-300')}>
-                          {entry.dailyAmount}₾
-                        </p>
-                        <p className="text-[8px] text-muted-foreground">დღეს</p>
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleDailyPlanItem(entry)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                      >
+                        <div className={cn(
+                          'w-4 h-4 rounded-md border-2 flex items-center justify-center shrink-0 transition-all',
+                          checked ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300 dark:border-slate-600'
+                        )}>
+                          {checked && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className="text-xs">{entry.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-[11px] font-bold truncate', checked && 'line-through text-muted-foreground')}>
+                            {entry.name}
+                          </p>
+                          <p className="text-[9px] text-muted-foreground">
+                            {entry.daysLeft} დღე დარჩა · {entry.alreadySaved > 0 && `${entry.alreadySaved}₾ გადადებულია · `}
+                            {entry.remaining}₾ სულ
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={cn('text-sm font-black', checked ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-700 dark:text-indigo-300')}>
+                            {checked ? savedAmount : entry.dailyAmount}₾
+                          </p>
+                          <p className="text-[8px] text-muted-foreground">{isPaidFull ? 'სრულად' : 'დღეს'}</p>
+                        </div>
+                      </button>
+                      {/* სრულად გადახდა ღილაკი */}
+                      {!checked && entry.remaining > entry.dailyAmount && (
+                        <button
+                          type="button"
+                          onClick={() => toggleDailyPlanItem(entry, true)}
+                          className="shrink-0 px-1.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700 text-[9px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors"
+                          title="სრულად გადახდა"
+                        >
+                          {entry.remaining}₾
+                          <br />
+                          <span className="text-[7px] font-normal">სრულად</span>
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>

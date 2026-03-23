@@ -304,17 +304,26 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     return saved;
   };
 
-  // 1. ყოველთვიური გადასახადები (bills)
+  // 1. ყოველთვიური გადასახადები (bills) — მხოლოდ უახლოესი თვის თითოეული სახელისთვის
+  const billsByName: Record<string, typeof state.bills[0]> = {};
   for (const bill of state.bills) {
     if (bill.paid) continue;
     if (!bill.dueDate) continue;
 
     const due = new Date(bill.dueDate);
     due.setHours(0, 0, 0, 0);
-    const diffMs = due.getTime() - today.getTime();
-    const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    if (due.getTime() <= today.getTime()) continue;
 
-    if (daysLeft <= 0) continue; // ვადაგასულია
+    const existing = billsByName[bill.name];
+    if (!existing || bill.dueDate < existing.dueDate!) {
+      billsByName[bill.name] = bill;
+    }
+  }
+
+  for (const bill of Object.values(billsByName)) {
+    const due = new Date(bill.dueDate!);
+    due.setHours(0, 0, 0, 0);
+    const daysLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
     const saved = getSaved(bill.id, 'bill');
     const remaining = Math.max(0, bill.amount - saved);
@@ -329,7 +338,7 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
       remaining,
       daysLeft,
       dailyAmount: Math.ceil(remaining / daysLeft),
-      dueDate: bill.dueDate,
+      dueDate: bill.dueDate!,
       icon: '📅',
     });
   }
