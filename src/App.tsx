@@ -41,7 +41,8 @@ export const App: React.FC = () => {
   } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
-  const [activeTab, setActiveTab] = useState<'debts' | 'payments' | 'loans' | 'stats'>('debts');
+  const [activeTab, setActiveTab] = useState<'debts' | 'payments' | 'loans' | 'stats'>('payments');
+  const [paymentSubTab, setPaymentSubTab] = useState<'bills' | 'utilities' | 'subscriptions'>('bills');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
 
@@ -733,8 +734,8 @@ export const App: React.FC = () => {
   }
 
   const tabs = [
-    { key: 'debts' as const, label: 'ვალები', icon: '💸' },
     { key: 'payments' as const, label: 'გადასახადები', icon: '📅' },
+    { key: 'debts' as const, label: 'ვალები / სესხები', icon: '💸' },
     { key: 'loans' as const, label: 'გასესხებული', icon: '🤝' },
     { key: 'stats' as const, label: 'სტატისტიკა', icon: '📊' },
   ];
@@ -835,6 +836,67 @@ export const App: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
+
+          {/* ===== გადასახადები — შიდა ტაბებით ===== */}
+          {activeTab === 'payments' && (
+            <>
+              {/* შიდა ტაბები */}
+              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 gap-0.5">
+                {([
+                  { key: 'bills' as const, label: 'ყოველთვიური', icon: '📅', count: state.bills.filter((b) => !b.paid && (b.reset_month ?? 0) === (selectedMonth !== '' ? parseInt(selectedMonth) : new Date().getMonth())).length },
+                  { key: 'utilities' as const, label: 'კომუნალური', icon: '⚡', count: 0 },
+                  { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄', count: (state.subscriptions || []).filter((s) => !s.paid && (s.reset_month ?? 0) === (selectedMonth !== '' ? parseInt(selectedMonth) : new Date().getMonth())).length },
+                ]).map((sub) => (
+                  <button
+                    key={sub.key}
+                    onClick={() => setPaymentSubTab(sub.key)}
+                    className={cn(
+                      'flex-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1',
+                      paymentSubTab === sub.key
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    )}
+                  >
+                    <span>{sub.icon}</span>
+                    <span>{sub.label}</span>
+                    {sub.count > 0 && (
+                      <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center">{sub.count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {paymentSubTab === 'bills' && (
+                <BillsManager
+                  state={state}
+                  selectedMonth={selectedMonth}
+                  onAddBill={handleAddBill}
+                  onRemoveBill={handleRemoveBill}
+                  onToggleBillPaid={handleToggleBillPaid}
+                  onEditBill={handleEditBill}
+                />
+              )}
+              {paymentSubTab === 'utilities' && (
+                <UtilitiesManager
+                  state={state}
+                  selectedMonth={selectedMonth}
+                  onToggleBillPaid={handleToggleBillPaid}
+                />
+              )}
+              {paymentSubTab === 'subscriptions' && (
+                <SubscriptionsManager
+                  state={state}
+                  selectedMonth={selectedMonth}
+                  onAddSubscription={handleAddSubscription}
+                  onRemoveSubscription={handleRemoveSubscription}
+                  onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
+                  onEditSubscription={handleEditSubscription}
+                />
+              )}
+            </>
+          )}
+
+          {/* ===== ვალები / სესხები — ერთიანი ===== */}
           {activeTab === 'debts' && (
             <>
               <DebtsManager
@@ -845,67 +907,22 @@ export const App: React.FC = () => {
                 onPayDebtPart={handlePayDebtPart}
                 onEditDebt={handleEditDebt}
               />
-              {(state.bankLoans || []).length > 0 && (
-                <>
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🏦 საბანკო სესხები</p>
-                  </div>
-                  <BankLoansManager
-                    state={state}
-                    onAddBankLoan={handleAddBankLoan}
-                    onRemoveBankLoan={handleRemoveBankLoan}
-                    onEditBankLoan={handleEditBankLoan}
-                  />
-                </>
-              )}
-              {(state.lombards || []).length > 0 && (
-                <>
-                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🏪 ლობარდი</p>
-                  </div>
-                  <LombardsManager
-                    state={state}
-                    onAddLombard={handleAddLombard}
-                    onRemoveLombard={handleRemoveLombard}
-                    onEditLombard={handleEditLombard}
-                  />
-                </>
-              )}
-            </>
-          )}
-
-          {activeTab === 'payments' && (
-            <>
-              <BillsManager
+              <BankLoansManager
                 state={state}
-                selectedMonth={selectedMonth}
-                onAddBill={handleAddBill}
-                onRemoveBill={handleRemoveBill}
-                onToggleBillPaid={handleToggleBillPaid}
-                onEditBill={handleEditBill}
+                onAddBankLoan={handleAddBankLoan}
+                onRemoveBankLoan={handleRemoveBankLoan}
+                onEditBankLoan={handleEditBankLoan}
               />
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">⚡ კომუნალურები</p>
-              </div>
-              <UtilitiesManager
+              <LombardsManager
                 state={state}
-                selectedMonth={selectedMonth}
-                onToggleBillPaid={handleToggleBillPaid}
-              />
-              <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
-                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🔄 გამოწერები</p>
-              </div>
-              <SubscriptionsManager
-                state={state}
-                selectedMonth={selectedMonth}
-                onAddSubscription={handleAddSubscription}
-                onRemoveSubscription={handleRemoveSubscription}
-                onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
-                onEditSubscription={handleEditSubscription}
+                onAddLombard={handleAddLombard}
+                onRemoveLombard={handleRemoveLombard}
+                onEditLombard={handleEditLombard}
               />
             </>
           )}
 
+          {/* ===== გასესხებული ===== */}
           {activeTab === 'loans' && (
             <LoansManager
               state={state}
@@ -916,6 +933,7 @@ export const App: React.FC = () => {
             />
           )}
 
+          {/* ===== სტატისტიკა ===== */}
           {activeTab === 'stats' && (
             <StatsView
               state={state}
