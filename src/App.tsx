@@ -41,7 +41,7 @@ export const App: React.FC = () => {
   } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
-  const [activeTab, setActiveTab] = useState<'debts' | 'bills' | 'utilities' | 'subscriptions' | 'loans' | 'lombards' | 'bank' | 'stats'>('debts');
+  const [activeTab, setActiveTab] = useState<'debts' | 'payments' | 'loans' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
 
@@ -732,15 +732,9 @@ export const App: React.FC = () => {
     );
   }
 
-  const tabsRow1 = [
+  const tabs = [
     { key: 'debts' as const, label: 'ვალები', icon: '💸' },
-    { key: 'bills' as const, label: 'ყოველთვიური', icon: '📅' },
-    { key: 'utilities' as const, label: 'კომუნალურები', icon: '⚡' },
-    { key: 'subscriptions' as const, label: 'გამოწერები', icon: '🔄' },
-  ];
-  const tabsRow2 = [
-    { key: 'bank' as const, label: 'ბანკი', icon: '🏦' },
-    { key: 'lombards' as const, label: 'ლობარდი', icon: '🏪' },
+    { key: 'payments' as const, label: 'გადასახადები', icon: '📅' },
     { key: 'loans' as const, label: 'გასესხებული', icon: '🤝' },
     { key: 'stats' as const, label: 'სტატისტიკა', icon: '📊' },
   ];
@@ -822,35 +816,18 @@ export const App: React.FC = () => {
 
         <div className="border-b border-slate-200 dark:border-slate-700">
           <div className="flex text-xs font-bold">
-            {tabsRow1.map((tab) => (
+            {tabs.map((tab) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 className={cn(
-                  'flex-1 py-1.5 px-1 transition-all duration-200 border-b-2 flex items-center justify-center gap-1',
+                  'flex-1 py-2 px-1 transition-all duration-200 border-b-2 flex items-center justify-center gap-1.5',
                   activeTab === tab.key
                     ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
                 )}
               >
-                <span className="text-[10px]">{tab.icon}</span>
-                <span className="text-[11px]">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex text-xs font-bold">
-            {tabsRow2.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={cn(
-                  'flex-1 py-1.5 px-1 transition-all duration-200 border-b-2 flex items-center justify-center gap-1',
-                  activeTab === tab.key
-                    ? 'text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-                    : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
-                )}
-              >
-                <span className="text-[10px]">{tab.icon}</span>
+                <span className="text-sm">{tab.icon}</span>
                 <span className="text-[11px]">{tab.label}</span>
               </button>
             ))}
@@ -859,44 +836,74 @@ export const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {activeTab === 'debts' && (
-            <DebtsManager
-              state={state}
-              onAddDebt={handleAddDebt}
-              onRemoveDebt={handleRemoveDebt}
-              onToggleDebtPaid={handleToggleDebtPaid}
-              onPayDebtPart={handlePayDebtPart}
-              onEditDebt={handleEditDebt}
-            />
+            <>
+              <DebtsManager
+                state={state}
+                onAddDebt={handleAddDebt}
+                onRemoveDebt={handleRemoveDebt}
+                onToggleDebtPaid={handleToggleDebtPaid}
+                onPayDebtPart={handlePayDebtPart}
+                onEditDebt={handleEditDebt}
+              />
+              {(state.bankLoans || []).length > 0 && (
+                <>
+                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🏦 საბანკო სესხები</p>
+                  </div>
+                  <BankLoansManager
+                    state={state}
+                    onAddBankLoan={handleAddBankLoan}
+                    onRemoveBankLoan={handleRemoveBankLoan}
+                    onEditBankLoan={handleEditBankLoan}
+                  />
+                </>
+              )}
+              {(state.lombards || []).length > 0 && (
+                <>
+                  <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                    <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🏪 ლობარდი</p>
+                  </div>
+                  <LombardsManager
+                    state={state}
+                    onAddLombard={handleAddLombard}
+                    onRemoveLombard={handleRemoveLombard}
+                    onEditLombard={handleEditLombard}
+                  />
+                </>
+              )}
+            </>
           )}
 
-          {activeTab === 'bills' && (
-            <BillsManager
-              state={state}
-              selectedMonth={selectedMonth}
-              onAddBill={handleAddBill}
-              onRemoveBill={handleRemoveBill}
-              onToggleBillPaid={handleToggleBillPaid}
-              onEditBill={handleEditBill}
-            />
-          )}
-
-          {activeTab === 'utilities' && (
-            <UtilitiesManager
-              state={state}
-              selectedMonth={selectedMonth}
-              onToggleBillPaid={handleToggleBillPaid}
-            />
-          )}
-
-          {activeTab === 'subscriptions' && (
-            <SubscriptionsManager
-              state={state}
-              selectedMonth={selectedMonth}
-              onAddSubscription={handleAddSubscription}
-              onRemoveSubscription={handleRemoveSubscription}
-              onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
-              onEditSubscription={handleEditSubscription}
-            />
+          {activeTab === 'payments' && (
+            <>
+              <BillsManager
+                state={state}
+                selectedMonth={selectedMonth}
+                onAddBill={handleAddBill}
+                onRemoveBill={handleRemoveBill}
+                onToggleBillPaid={handleToggleBillPaid}
+                onEditBill={handleEditBill}
+              />
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">⚡ კომუნალურები</p>
+              </div>
+              <UtilitiesManager
+                state={state}
+                selectedMonth={selectedMonth}
+                onToggleBillPaid={handleToggleBillPaid}
+              />
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-2">
+                <p className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">🔄 გამოწერები</p>
+              </div>
+              <SubscriptionsManager
+                state={state}
+                selectedMonth={selectedMonth}
+                onAddSubscription={handleAddSubscription}
+                onRemoveSubscription={handleRemoveSubscription}
+                onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
+                onEditSubscription={handleEditSubscription}
+              />
+            </>
           )}
 
           {activeTab === 'loans' && (
@@ -906,24 +913,6 @@ export const App: React.FC = () => {
               onRemoveLoan={handleRemoveLoan}
               onToggleLoanReturned={handleToggleLoanReturned}
               onEditLoan={handleEditLoan}
-            />
-          )}
-
-          {activeTab === 'bank' && (
-            <BankLoansManager
-              state={state}
-              onAddBankLoan={handleAddBankLoan}
-              onRemoveBankLoan={handleRemoveBankLoan}
-              onEditBankLoan={handleEditBankLoan}
-            />
-          )}
-
-          {activeTab === 'lombards' && (
-            <LombardsManager
-              state={state}
-              onAddLombard={handleAddLombard}
-              onRemoveLombard={handleRemoveLombard}
-              onEditLombard={handleEditLombard}
             />
           )}
 
