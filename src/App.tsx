@@ -43,6 +43,7 @@ export const App: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
   const [activeTab, setActiveTab] = useState<'debts' | 'payments' | 'loans' | 'stats'>('payments');
   const [paymentSubTab, setPaymentSubTab] = useState<'bills' | 'utilities' | 'subscriptions'>('bills');
+  const [debtSubTab, setDebtSubTab] = useState<'personal' | 'bank'>('personal');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
 
@@ -896,29 +897,60 @@ export const App: React.FC = () => {
             </>
           )}
 
-          {/* ===== ვალები / სესხები — ერთიანი ===== */}
+          {/* ===== ვალები / სესხები — შიდა ტაბებით ===== */}
           {activeTab === 'debts' && (
             <>
-              <DebtsManager
-                state={state}
-                onAddDebt={handleAddDebt}
-                onRemoveDebt={handleRemoveDebt}
-                onToggleDebtPaid={handleToggleDebtPaid}
-                onPayDebtPart={handlePayDebtPart}
-                onEditDebt={handleEditDebt}
-              />
-              <BankLoansManager
-                state={state}
-                onAddBankLoan={handleAddBankLoan}
-                onRemoveBankLoan={handleRemoveBankLoan}
-                onEditBankLoan={handleEditBankLoan}
-              />
-              <LombardsManager
-                state={state}
-                onAddLombard={handleAddLombard}
-                onRemoveLombard={handleRemoveLombard}
-                onEditLombard={handleEditLombard}
-              />
+              <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 gap-0.5">
+                {([
+                  { key: 'personal' as const, label: 'ვალები', icon: '💸', count: state.debts.filter((d) => !d.paid).length },
+                  { key: 'bank' as const, label: 'ბანკები / მიკროსაფინანსო', icon: '🏦', count: (state.bankLoans || []).filter((l) => l.active).length + (state.lombards || []).length },
+                ]).map((sub) => (
+                  <button
+                    key={sub.key}
+                    onClick={() => setDebtSubTab(sub.key)}
+                    className={cn(
+                      'flex-1 py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1',
+                      debtSubTab === sub.key
+                        ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                    )}
+                  >
+                    <span>{sub.icon}</span>
+                    <span>{sub.label}</span>
+                    {sub.count > 0 && (
+                      <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[8px] flex items-center justify-center">{sub.count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {debtSubTab === 'personal' && (
+                <DebtsManager
+                  state={state}
+                  onAddDebt={handleAddDebt}
+                  onRemoveDebt={handleRemoveDebt}
+                  onToggleDebtPaid={handleToggleDebtPaid}
+                  onPayDebtPart={handlePayDebtPart}
+                  onEditDebt={handleEditDebt}
+                />
+              )}
+              {debtSubTab === 'bank' && (
+                <>
+                  <BankLoansManager
+                    state={state}
+                    onAddBankLoan={handleAddBankLoan}
+                    onRemoveBankLoan={handleRemoveBankLoan}
+                    onEditBankLoan={handleEditBankLoan}
+                  />
+                  <div className="border-t border-slate-200 dark:border-slate-700 my-2" />
+                  <LombardsManager
+                    state={state}
+                    onAddLombard={handleAddLombard}
+                    onRemoveLombard={handleRemoveLombard}
+                    onEditLombard={handleEditLombard}
+                  />
+                </>
+              )}
             </>
           )}
 
