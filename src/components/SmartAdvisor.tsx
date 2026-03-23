@@ -1,9 +1,9 @@
-import React, { useMemo } from 'react';
-import { AppState } from '../types';
+import React, { useMemo, useState } from 'react';
+import { AppState, ExpenseCategory } from '../types';
 import { Card, CardContent } from '@/components/ui/card';
-import { Zap } from 'lucide-react';
+import { Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getWorkDaysInMonth } from '../utils/calculations';
+import { getWorkDaysInMonth, getExpensesTotal } from '../utils/calculations';
 
 interface SmartAdvisorProps {
   state: AppState;
@@ -20,16 +20,18 @@ type Insight = {
 };
 
 export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth }) => {
+  const [expanded, setExpanded] = useState(true);
+
   const analysis = useMemo(() => {
     const now = new Date();
     const month = selectedMonth !== '' ? parseInt(selectedMonth) : now.getMonth();
     const year = now.getFullYear();
     const profile = state.profile;
+    const today = now.toISOString().split('T')[0];
 
     // === შემოსავლის გამოთვლა ===
     const workDaysInMonth = getWorkDaysInMonth(year, month, profile.workDays || [1, 2, 3, 4, 5]);
 
-    // ხელფასი
     let monthlySalary = 0;
     if (profile.incomeType === 'salary' || profile.incomeType === 'both') {
       if (profile.payFrequency === 'monthly_1' || profile.payFrequency === 'monthly_2') {
@@ -41,14 +43,12 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
       }
     }
 
-    // ყოველდღიური შემოსავალი
     let dailyIncome = 0;
     if (profile.incomeType === 'freelance' || profile.incomeType === 'both') {
       dailyIncome = profile.dailyTarget || 0;
     }
     const monthlyDailyIncome = dailyIncome * workDaysInMonth;
 
-    // დამატებითი შემოსავალი
     const monthlyAdditional = (profile.additionalIncomes || []).reduce((sum, ai) => {
       if (ai.frequency === 'monthly') return sum + ai.amount;
       if (ai.frequency === 'weekly') return sum + ai.amount * 4;
@@ -58,30 +58,29 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
 
     const totalMonthlyIncome = monthlySalary + monthlyDailyIncome + monthlyAdditional;
 
-    // === ვალდებულებების გამოთვლა ===
-
-    // ყოველთვიური გადასახადები (ამ თვის)
+    // === ვალდებულებები ===
     const monthBills = state.bills.filter((b) => (b.reset_month ?? 0) === month);
     const billsTotal = monthBills.reduce((s, b) => s + b.amount, 0);
-
-    // გამოწერები (ამ თვის)
     const monthSubs = (state.subscriptions || []).filter((s) => (s.reset_month ?? 0) === month);
     const subsTotal = monthSubs.reduce((s, sub) => s + sub.amount, 0);
 
-    // ვალების ყოველთვიური გადახდა (საშუალო)
     const activeDebts = state.debts.filter((d) => !d.paid);
     const totalDebt = activeDebts.reduce((s, d) => s + Math.max(0, d.amount - (d.paidAmount || 0)), 0);
-    // ვალის ყოველთვიური — თუ parts აქვს, გამოვიყენოთ; თუ არა, ვადაზე დავყოთ
     const monthlyDebtPayment = activeDebts.reduce((s, d) => {
       const remaining = d.amount - (d.paidAmount || 0);
       if (remaining <= 0) return s;
-      const parts = d.parts || 1;
-      return s + Math.ceil(remaining / parts);
+      return s + Math.ceil(remaining / (d.parts || 1));
     }, 0);
 
-    // საშუალო ყოველდღიური ხარჯი (ბოლო 30 დღიდან)
+    // საშუალო ყოველდღიური ხარჯი
     let avgDailyExpense = 0;
     let daysWithData = 0;
+    const expByCategory: Record<ExpenseCategory, number> = {
+      'საჭირო': 0, 'აუცილებელი': 0, 'სურვილი': 0, 'გაუთვალისწინებელი': 0,
+    };
+    // ხარჯები subcategory-ით ბოლო 30 დღის
+    const subcatTotals30: Record<string, { total: number; count: number; max: number }> = {};
+
     for (let i = 0; i < 30; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
@@ -91,24 +90,229 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
         const dayExp = (data.expenses || []).reduce((s, e) => s + e.amount, 0);
         avgDailyExpense += dayExp;
         daysWithData++;
+        for (const exp of data.expenses || []) {
+          if (exp.category) {
+            expByCategory[exp.category] = (expByCategory[exp.category] || 0) + exp.amount;
+          }
+          const sub = exp.subcategory || 'სხვა';
+          if (!subcatTotals30[sub]) subcatTotals30[sub] = { total: 0, count: 0, max: 0 };
+          subcatTotals30[sub].total += exp.amount;
+          subcatTotals30[sub].count += 1;
+          subcatTotals30[sub].max = Math.max(subcatTotals30[sub].max, exp.amount);
+        }
       }
     }
     avgDailyExpense = daysWithData > 0 ? Math.round(avgDailyExpense / daysWithData) : 0;
     const monthlyLivingExpenses = avgDailyExpense * 30;
 
-    // სულ ყოველთვიური ვალდებულებები
     const totalMonthlyObligations = billsTotal + subsTotal + monthlyDebtPayment + monthlyLivingExpenses;
-
-    // ბალანსი
     const monthlyBalance = totalMonthlyIncome - totalMonthlyObligations;
     const deficitPercent = totalMonthlyIncome > 0
       ? Math.round((totalMonthlyObligations / totalMonthlyIncome) * 100)
       : 999;
 
+    // === ჯანმრთელობის ქულა (0-100) ===
+    let healthScore = 0;
+
+    // 1. ვალი/შემოსავალი (25 ქულა) — DTI ratio
+    if (totalMonthlyIncome > 0) {
+      const dti = totalMonthlyObligations / totalMonthlyIncome;
+      if (dti <= 0.3) healthScore += 25;
+      else if (dti <= 0.5) healthScore += 20;
+      else if (dti <= 0.7) healthScore += 12;
+      else if (dti <= 1.0) healthScore += 5;
+    }
+
+    // 2. დანაზოგის რეიტი (25 ქულა) — kulaba / income
+    const totalKulaba = Object.values(state.db).reduce((s, d) => s + (d.kulaba || 0), 0);
+    const totalIncomeReal = Object.values(state.db).reduce((s, d) => s + (d.incMain || 0) + (d.incExtra || 0), 0);
+    if (totalIncomeReal > 0) {
+      const savingsRate = totalKulaba / totalIncomeReal;
+      if (savingsRate >= 0.2) healthScore += 25;
+      else if (savingsRate >= 0.1) healthScore += 18;
+      else if (savingsRate >= 0.05) healthScore += 10;
+      else if (savingsRate > 0) healthScore += 5;
+    }
+
+    // 3. ბილების დროულობა (20 ქულა)
+    const allBillsCount = monthBills.length;
+    const paidBillsCount = monthBills.filter((b) => b.paid).length;
+    const overdueBills = monthBills.filter((b) => !b.paid && b.dueDate && b.dueDate < today);
+    if (allBillsCount > 0) {
+      const paidRate = paidBillsCount / allBillsCount;
+      healthScore += Math.round(paidRate * 15);
+      if (overdueBills.length === 0) healthScore += 5;
+    } else {
+      healthScore += 20; // ბილები არ აქვს — ნეიტრალური
+    }
+
+    // 4. ბიუჯეტის დაცვა (15 ქულა) — რამდენ დღეს ხარჯი < ბიუჯეტი
+    const dailyBudget = profile.dailyBudget || profile.dailyTarget || 150;
+    let daysUnderBudget = 0;
+    let totalDaysChecked = 0;
+    for (let i = 0; i < 30; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const data = state.db[key];
+      if (data) {
+        totalDaysChecked++;
+        const dayExp = getExpensesTotal(data);
+        if (dayExp <= dailyBudget) daysUnderBudget++;
+      }
+    }
+    if (totalDaysChecked > 0) {
+      healthScore += Math.round((daysUnderBudget / totalDaysChecked) * 15);
+    } else {
+      healthScore += 8;
+    }
+
+    // 5. საგანგებო ფონდი (15 ქულა) — kulaba / avgMonthlyExpenses
+    if (monthlyLivingExpenses > 0) {
+      const monthsCovered = totalKulaba / monthlyLivingExpenses;
+      if (monthsCovered >= 3) healthScore += 15;
+      else if (monthsCovered >= 1) healthScore += 10;
+      else if (monthsCovered >= 0.5) healthScore += 5;
+      else if (totalKulaba > 0) healthScore += 2;
+    } else {
+      healthScore += 8;
+    }
+
+    healthScore = Math.min(100, Math.max(0, healthScore));
+
+    // === "ჯიბეში" — რეალურად რამდენი გაქვს დასახარჯი ===
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDate = now.getDate();
+    const daysRemaining = Math.max(1, daysInMonth - todayDate + 1);
+
+    // ამ თვის რეალური შემოსავალი
+    let monthActualIncome = 0;
+    let monthActualExpenses = 0;
+    Object.entries(state.db).forEach(([date, day]) => {
+      if (new Date(date).getMonth() === month) {
+        monthActualIncome += (day.incMain || 0) + (day.incExtra || 0);
+        monthActualExpenses += getExpensesTotal(day) + (day.kulaba || 0);
+      }
+    });
+
+    const unpaidBillsLeft = monthBills.filter((b) => !b.paid).reduce((s, b) => s + b.amount, 0);
+    const unpaidSubsLeft = monthSubs.filter((s) => !s.paid).reduce((s, sub) => s + sub.amount, 0);
+    const inMyPocket = monthActualIncome - monthActualExpenses - unpaidBillsLeft - unpaidSubsLeft;
+    const dailySafeSpend = Math.max(0, Math.floor(inMyPocket / daysRemaining));
+
+    // === 50/30/20 ანალიზი ===
+    const totalCatExp = Object.values(expByCategory).reduce((s, v) => s + v, 0);
+    const needsPercent = totalCatExp > 0 ? Math.round(((expByCategory['საჭირო'] + expByCategory['აუცილებელი']) / totalCatExp) * 100) : 0;
+    const wantsPercent = totalCatExp > 0 ? Math.round((expByCategory['სურვილი'] / totalCatExp) * 100) : 0;
+    const savingsPercent = totalIncomeReal > 0 ? Math.round((totalKulaba / totalIncomeReal) * 100) : 0;
+
+    // === ხარჯვის ანომალიები ===
+    const anomalies: string[] = [];
+    const todayData = state.db[today];
+    if (todayData) {
+      for (const exp of todayData.expenses || []) {
+        const sub = exp.subcategory || 'სხვა';
+        const stats = subcatTotals30[sub];
+        if (stats && stats.count >= 3) {
+          const avg = stats.total / stats.count;
+          if (exp.amount > avg * 2 && exp.amount > 20) {
+            anomalies.push(`${sub}: ${exp.amount}₾ (საშუალო: ${Math.round(avg)}₾)`);
+          }
+        }
+      }
+      const todayTotal = getExpensesTotal(todayData);
+      if (avgDailyExpense > 0 && todayTotal > avgDailyExpense * 2 && todayTotal > 30) {
+        anomalies.push(`დღეს სულ: ${todayTotal}₾ (საშუალო: ${avgDailyExpense}₾/დღე)`);
+      }
+    }
+
+    // === ფორეკასტი — შემდეგ 30 დღეში სად გელოდება კასის დეფიციტი ===
+    let forecastBalance = inMyPocket;
+    const expectedDailyInc = totalMonthlyIncome > 0 ? Math.round(totalMonthlyIncome / 30) : 0;
+    let cashCrunchDate: string | null = null;
+    for (let i = 1; i <= 30; i++) {
+      const fd = new Date();
+      fd.setDate(fd.getDate() + i);
+      const fdStr = fd.toISOString().split('T')[0];
+
+      forecastBalance += expectedDailyInc;
+      forecastBalance -= avgDailyExpense;
+
+      // გადასახადები ამ თარიღზე
+      for (const bill of state.bills) {
+        if (!bill.paid && bill.dueDate === fdStr) {
+          forecastBalance -= bill.amount;
+        }
+      }
+      for (const sub of state.subscriptions || []) {
+        if (!sub.paid && sub.dueDate === fdStr) {
+          forecastBalance -= sub.amount;
+        }
+      }
+
+      if (forecastBalance < 0 && !cashCrunchDate) {
+        cashCrunchDate = fdStr;
+      }
+    }
+
+    // === ვალის სტრატეგია ===
+    let debtStrategy: { snowballMonths: number; avalancheMonths: number; monthlySaved: number } | null = null;
+    if (activeDebts.length >= 2 && monthlyBalance > 0) {
+      const extraForDebt = Math.min(monthlyBalance, 200);
+
+      // Snowball — პატარადან დიდისკენ
+      const snowball = [...activeDebts].sort((a, b) => {
+        const ra = a.amount - (a.paidAmount || 0);
+        const rb = b.amount - (b.paidAmount || 0);
+        return ra - rb;
+      });
+      let sbMonths = 0;
+      let sbRemaining = snowball.map((d) => d.amount - (d.paidAmount || 0));
+      while (sbRemaining.some((r) => r > 0) && sbMonths < 120) {
+        sbMonths++;
+        let extra = extraForDebt;
+        for (let i = 0; i < sbRemaining.length; i++) {
+          if (sbRemaining[i] <= 0) continue;
+          const minPay = Math.ceil(snowball[i].amount / (snowball[i].parts || 12));
+          const pay = minPay + extra;
+          sbRemaining[i] -= pay;
+          extra = sbRemaining[i] < 0 ? Math.abs(sbRemaining[i]) : 0;
+          if (sbRemaining[i] < 0) sbRemaining[i] = 0;
+        }
+      }
+
+      // Avalanche — მაღალი პრიორიტეტიდან
+      const avalanche = [...activeDebts].sort((a, b) => {
+        const po: Record<string, number> = { high: 0, medium: 1, low: 2 };
+        return (po[a.priority || 'low'] || 2) - (po[b.priority || 'low'] || 2);
+      });
+      let avMonths = 0;
+      let avRemaining = avalanche.map((d) => d.amount - (d.paidAmount || 0));
+      while (avRemaining.some((r) => r > 0) && avMonths < 120) {
+        avMonths++;
+        let extra = extraForDebt;
+        for (let i = 0; i < avRemaining.length; i++) {
+          if (avRemaining[i] <= 0) continue;
+          const minPay = Math.ceil(avalanche[i].amount / (avalanche[i].parts || 12));
+          const pay = minPay + extra;
+          avRemaining[i] -= pay;
+          extra = avRemaining[i] < 0 ? Math.abs(avRemaining[i]) : 0;
+          if (avRemaining[i] < 0) avRemaining[i] = 0;
+        }
+      }
+
+      if (sbMonths !== avMonths) {
+        debtStrategy = {
+          snowballMonths: sbMonths,
+          avalancheMonths: avMonths,
+          monthlySaved: Math.abs(sbMonths - avMonths),
+        };
+      }
+    }
+
     // === ინსაითები ===
     const insights: Insight[] = [];
 
-    // 1. კრიტიკული — შემოსავალი < ვალდებულებები
     if (totalMonthlyIncome > 0 && monthlyBalance < 0) {
       const deficit = Math.abs(monthlyBalance);
       const dailyExtra = Math.ceil(deficit / workDaysInMonth);
@@ -116,116 +320,139 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
         level: 'critical',
         icon: '🚨',
         title: 'შემოსავალი არ გყოფნის!',
-        message: `თვიური დეფიციტი: ${deficit}₾. დამატებით ${dailyExtra}₾/დღეში გჭირდება. იპოვე სამუშაო ან შეამცირე ხარჯები.`,
+        message: `დეფიციტი: ${deficit}₾/თვე. გჭირდება +${dailyExtra}₾/დღეში.`,
       });
     }
 
-    // 2. გაფრთხილება — 80%+ მიდის ვალდებულებებში
     if (totalMonthlyIncome > 0 && deficitPercent >= 80 && monthlyBalance >= 0) {
       insights.push({
         level: 'warning',
         icon: '⚠️',
-        title: 'შემოსავლის ' + deficitPercent + '% ვალდებულებებშია',
-        message: `თავისუფალი რჩება მხოლოდ ${monthlyBalance}₾/თვე. ნებისმიერი გაუთვალისწინებელი ხარჯი პრობლემაა.`,
+        title: `შემოსავლის ${deficitPercent}% ვალდებულებებშია`,
+        message: `თავისუფალი: ${monthlyBalance}₾/თვე.`,
       });
     }
 
-    // 3. ვალების პრიორიტეტი
-    const highPriorityDebts = activeDebts.filter((d) => d.priority === 'high');
-    if (highPriorityDebts.length > 0) {
-      const hpTotal = highPriorityDebts.reduce((s, d) => s + Math.max(0, d.amount - (d.paidAmount || 0)), 0);
-      insights.push({
-        level: 'warning',
-        icon: '🔴',
-        title: `${highPriorityDebts.length} მაღალი პრიორიტეტის ვალი`,
-        message: `სულ: ${hpTotal}₾. ეს ვალები პირველ რიგში უნდა დაიფაროს.`,
-      });
-    }
-
-    // 4. ვადაგასული ბილები
-    const today = new Date().toISOString().split('T')[0];
-    const overdueBills = monthBills.filter((b) => !b.paid && b.dueDate && b.dueDate < today);
     if (overdueBills.length > 0) {
-      const overdueTotal = overdueBills.reduce((s, b) => s + b.amount, 0);
       insights.push({
         level: 'critical',
         icon: '⏰',
-        title: `${overdueBills.length} ვადაგასული გადასახადი!`,
-        message: `${overdueTotal}₾ ვადაგასულია. გადაიხადე რაც შეიძლება მალე ჯარიმის თავიდან ასაცილებლად.`,
+        title: `${overdueBills.length} ვადაგასული!`,
+        message: `${overdueBills.reduce((s, b) => s + b.amount, 0)}₾ — გადაიხადე დაუყოვნებლივ.`,
       });
     }
 
-    // 5. მოახლოებული გადასახადები (3 დღეში)
-    const threeDaysLater = new Date();
-    threeDaysLater.setDate(threeDaysLater.getDate() + 3);
-    const threeDaysStr = threeDaysLater.toISOString().split('T')[0];
-    const upcomingBills = monthBills.filter(
-      (b) => !b.paid && b.dueDate && b.dueDate >= today && b.dueDate <= threeDaysStr
-    );
-    if (upcomingBills.length > 0) {
-      const names = upcomingBills.map((b) => b.name).join(', ');
-      const total = upcomingBills.reduce((s, b) => s + b.amount, 0);
+    // მოახლოებული 3 დღეში
+    const threeDays = new Date();
+    threeDays.setDate(threeDays.getDate() + 3);
+    const threeDaysStr = threeDays.toISOString().split('T')[0];
+    const upcoming = monthBills.filter((b) => !b.paid && b.dueDate && b.dueDate >= today && b.dueDate <= threeDaysStr);
+    if (upcoming.length > 0) {
       insights.push({
         level: 'warning',
         icon: '📆',
-        title: '3 დღეში გადასახდელი',
-        message: `${names} — სულ ${total}₾`,
+        title: `${upcoming.length} გადასახადი 3 დღეში`,
+        message: `${upcoming.map((b) => b.name).join(', ')} — ${upcoming.reduce((s, b) => s + b.amount, 0)}₾`,
       });
     }
 
-    // 6. ბანკის სესხის ვადა მთავრდება
+    // ანომალიები
+    if (anomalies.length > 0) {
+      insights.push({
+        level: 'warning',
+        icon: '📈',
+        title: 'უჩვეულო ხარჯი!',
+        message: anomalies.join(' · '),
+      });
+    }
+
+    // ფორეკასტი
+    if (cashCrunchDate) {
+      const crunchDate = new Date(cashCrunchDate);
+      const daysUntil = Math.ceil((crunchDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      insights.push({
+        level: 'critical',
+        icon: '💸',
+        title: `კასის დეფიციტი ${daysUntil} დღეში!`,
+        message: `${cashCrunchDate} — ბალანსი უარყოფითი გახდება. გაზარდე შემოსავალი ან შეამცირე ხარჯი.`,
+      });
+    }
+
+    // 50/30/20
+    if (totalCatExp > 0 && needsPercent > 60) {
+      insights.push({
+        level: 'info',
+        icon: '📊',
+        title: `საჭიროებები: ${needsPercent}% (რეკომენდაცია: 50%)`,
+        message: `სურვილები: ${wantsPercent}%. შეამცირე აუცილებელი ხარჯები ${needsPercent - 50}%-ით.`,
+      });
+    }
+
+    // ვალის სტრატეგია
+    if (debtStrategy) {
+      const better = debtStrategy.snowballMonths < debtStrategy.avalancheMonths ? 'Snowball' : 'Avalanche';
+      const diff = Math.abs(debtStrategy.snowballMonths - debtStrategy.avalancheMonths);
+      insights.push({
+        level: 'info',
+        icon: '🎯',
+        title: `${better} სტრატეგია ${diff} თვით უკეთესია`,
+        message: `Snowball: ${debtStrategy.snowballMonths} თვე · Avalanche: ${debtStrategy.avalancheMonths} თვე`,
+      });
+    }
+
+    // მაღალი პრიორიტეტი
+    const hpDebts = activeDebts.filter((d) => d.priority === 'high');
+    if (hpDebts.length > 0) {
+      insights.push({
+        level: 'warning',
+        icon: '🔴',
+        title: `${hpDebts.length} მაღალი პრიორიტეტის ვალი`,
+        message: `${hpDebts.reduce((s, d) => s + Math.max(0, d.amount - (d.paidAmount || 0)), 0)}₾`,
+      });
+    }
+
+    // სესხის ვადა
     for (const loan of state.bankLoans || []) {
       if (!loan.active) continue;
       const end = new Date(loan.endDate + '-01');
-      const monthsLeft = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
-      if (monthsLeft <= 3 && monthsLeft > 0) {
+      const ml = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
+      if (ml <= 3 && ml > 0) {
         insights.push({
-          level: 'info',
-          icon: '🏦',
-          title: `სესხი მთავრდება ${monthsLeft} თვეში`,
-          message: `${loan.name || loan.type} — ძირი: ${loan.principal}₾`,
+          level: 'info', icon: '🏦',
+          title: `სესხი მთავრდება ${ml} თვეში`,
+          message: `${loan.name || loan.type} — ${loan.principal}₾`,
         });
       }
     }
 
-    // 7. დადებითი — კარგად ხარ
-    if (totalMonthlyIncome > 0 && deficitPercent < 60) {
+    // კარგია
+    if (totalMonthlyIncome > 0 && deficitPercent < 60 && overdueBills.length === 0) {
       insights.push({
-        level: 'success',
-        icon: '✅',
+        level: 'success', icon: '✅',
         title: 'ფინანსური მდგომარეობა კარგია',
-        message: `შემოსავლის ${100 - deficitPercent}% თავისუფალია. გააგრძელე ასე!`,
+        message: `${100 - deficitPercent}% თავისუფალია.`,
       });
     }
 
-    // 8. შემოსავალი არ არის დაყენებული
     if (totalMonthlyIncome === 0) {
       insights.push({
-        level: 'info',
-        icon: '💡',
+        level: 'info', icon: '💡',
         title: 'შემოსავალი არ არის მითითებული',
-        message: 'დააყენე ხელფასი ან ყოველდღიური შემოსავალი რომ ჭკვიანი ანალიზი იმუშაოს.',
+        message: 'დააყენე პროფილში რომ ანალიზი იმუშაოს.',
       });
     }
 
     return {
-      totalMonthlyIncome,
-      monthlySalary,
-      monthlyDailyIncome,
-      monthlyAdditional,
-      billsTotal,
-      subsTotal,
-      monthlyDebtPayment,
-      monthlyLivingExpenses,
-      totalMonthlyObligations,
-      monthlyBalance,
-      deficitPercent,
-      totalDebt,
+      totalMonthlyIncome, monthlySalary, monthlyDailyIncome, monthlyAdditional,
+      billsTotal, subsTotal, monthlyDebtPayment, monthlyLivingExpenses,
+      totalMonthlyObligations, monthlyBalance, deficitPercent, totalDebt,
+      healthScore, inMyPocket, dailySafeSpend, daysRemaining,
+      needsPercent, wantsPercent, savingsPercent,
       insights,
     };
   }, [state, selectedMonth]);
 
-  if (analysis.insights.length === 0) return null;
+  const a = analysis;
 
   const levelStyles: Record<AlertLevel, { bg: string; border: string; iconColor: string }> = {
     critical: { bg: 'bg-red-50 dark:bg-red-900/20', border: 'border-red-300 dark:border-red-700', iconColor: 'text-red-500' },
@@ -234,111 +461,160 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
     success: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', border: 'border-emerald-300 dark:border-emerald-700', iconColor: 'text-emerald-500' },
   };
 
-  const a = analysis;
+  const scoreColor = a.healthScore >= 70 ? '#10b981' : a.healthScore >= 40 ? '#f59e0b' : '#ef4444';
+  const scoreLabel = a.healthScore >= 80 ? 'შესანიშნავი' : a.healthScore >= 60 ? 'კარგი' : a.healthScore >= 40 ? 'საშუალო' : a.healthScore >= 20 ? 'სუსტი' : 'კრიტიკული';
 
   return (
     <div className="space-y-2">
-      {/* ფინანსური მიმოხილვა */}
-      {a.totalMonthlyIncome > 0 && (
-        <Card className="border-0 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800/50 dark:to-blue-900/20">
-          <CardContent className="p-2.5">
-            <div className="flex items-center gap-1.5 mb-2">
-              <Zap className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
-              <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">ფინანსური ანალიზი</span>
+      {/* ჰედერი — ჯანმრთელობის ქულა + ჯიბეში */}
+      <Card className="border-0 bg-gradient-to-r from-slate-50 to-indigo-50 dark:from-slate-800/50 dark:to-indigo-900/20">
+        <CardContent className="p-2.5">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center justify-between mb-2"
+          >
+            <div className="flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-[11px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider">ჭკვიანი მრჩეველი</span>
+              {a.insights.filter((i) => i.level === 'critical').length > 0 && (
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              )}
             </div>
+            {expanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+          </button>
 
-            {/* შემოსავალი vs ვალდებულებები ბარი */}
-            <div className="mb-2">
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">შემოსავალი: {a.totalMonthlyIncome}₾</span>
-                <span className="text-red-500 font-bold">ვალდებულებები: {a.totalMonthlyObligations}₾</span>
-              </div>
-              <div className="w-full h-3 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                <div
-                  className={cn(
-                    'h-full rounded-full transition-all duration-500',
-                    a.deficitPercent > 100 ? 'bg-red-500' : a.deficitPercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'
-                  )}
-                  style={{ width: `${Math.min(a.deficitPercent, 100)}%` }}
+          {/* ჯანმრთელობის ქულა + ჯიბეში — ყოველთვის ჩანს */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {/* ქულა */}
+            <div className="relative">
+              <svg viewBox="0 0 36 36" className="w-14 h-14 mx-auto">
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none" stroke="currentColor" strokeWidth="3" className="text-slate-200 dark:text-slate-700"
                 />
+                <path
+                  d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  fill="none" stroke={scoreColor} strokeWidth="3"
+                  strokeDasharray={`${a.healthScore}, 100`}
+                  className="transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-sm font-black" style={{ color: scoreColor }}>{a.healthScore}</span>
               </div>
-              <p className="text-[9px] text-center text-muted-foreground mt-0.5">
-                {a.deficitPercent > 100
-                  ? `🔴 ${a.deficitPercent - 100}% დეფიციტი`
-                  : `თავისუფალი: ${100 - a.deficitPercent}% (${a.monthlyBalance}₾)`}
+              <p className="text-[8px] font-bold mt-0.5" style={{ color: scoreColor }}>{scoreLabel}</p>
+            </div>
+
+            {/* ჯიბეში */}
+            <div>
+              <p className="text-[8px] text-muted-foreground mb-0.5">💰 ჯიბეში</p>
+              <p className={cn('text-lg font-black', a.inMyPocket >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')}>
+                {a.inMyPocket}₾
               </p>
+              <p className="text-[8px] text-muted-foreground">{a.daysRemaining} დღე დარჩა</p>
             </div>
 
-            {/* დეტალები */}
-            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
-              {a.monthlySalary > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">💼 ხელფასი:</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{a.monthlySalary}₾</span>
-                </div>
-              )}
-              {a.monthlyDailyIncome > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">📊 ყოველდღიური:</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{a.monthlyDailyIncome}₾</span>
-                </div>
-              )}
-              {a.monthlyAdditional > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">➕ დამატებითი:</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{a.monthlyAdditional}₾</span>
-                </div>
-              )}
-              {a.billsTotal > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">📅 ბილები:</span>
-                  <span className="font-bold text-red-500">{a.billsTotal}₾</span>
-                </div>
-              )}
-              {a.subsTotal > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">🔄 გამოწერები:</span>
-                  <span className="font-bold text-red-500">{a.subsTotal}₾</span>
-                </div>
-              )}
-              {a.monthlyDebtPayment > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">💸 ვალები:</span>
-                  <span className="font-bold text-red-500">{a.monthlyDebtPayment}₾</span>
-                </div>
-              )}
-              {a.monthlyLivingExpenses > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">🛒 ყოველდღიური:</span>
-                  <span className="font-bold text-red-500">{a.monthlyLivingExpenses}₾</span>
-                </div>
-              )}
+            {/* დღიური ლიმიტი */}
+            <div>
+              <p className="text-[8px] text-muted-foreground mb-0.5">📊 დღეს</p>
+              <p className={cn('text-lg font-black', a.dailySafeSpend >= (a.totalMonthlyIncome > 0 ? 20 : 0) ? 'text-blue-600 dark:text-blue-400' : 'text-red-600 dark:text-red-400')}>
+                {a.dailySafeSpend}₾
+              </p>
+              <p className="text-[8px] text-muted-foreground">უსაფრთხო</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          </div>
 
-      {/* ინსაითების ბარათები */}
-      {analysis.insights
-        .sort((a, b) => {
-          const order: Record<AlertLevel, number> = { critical: 0, warning: 1, info: 2, success: 3 };
-          return order[a.level] - order[b.level];
-        })
-        .map((insight, i) => {
-          const style = levelStyles[insight.level];
-          return (
-            <div
-              key={i}
-              className={cn('flex items-start gap-2 px-2.5 py-2 rounded-xl border', style.bg, style.border)}
-            >
-              <span className="text-sm shrink-0 mt-0.5">{insight.icon}</span>
-              <div className="min-w-0">
-                <p className={cn('text-[11px] font-black', style.iconColor)}>{insight.title}</p>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">{insight.message}</p>
+          {/* 50/30/20 მინი ბარი */}
+          {a.needsPercent + a.wantsPercent > 0 && (
+            <div className="mt-2">
+              <div className="flex h-2 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700">
+                <div className="bg-blue-500 transition-all" style={{ width: `${a.needsPercent}%` }} title={`საჭირო: ${a.needsPercent}%`} />
+                <div className="bg-orange-400 transition-all" style={{ width: `${a.wantsPercent}%` }} title={`სურვილი: ${a.wantsPercent}%`} />
+                <div className="bg-emerald-500 transition-all" style={{ width: `${a.savingsPercent}%` }} title={`დანაზოგი: ${a.savingsPercent}%`} />
+              </div>
+              <div className="flex justify-between text-[8px] mt-0.5 text-muted-foreground">
+                <span>🔵 საჭირო {a.needsPercent}%</span>
+                <span>🟠 სურვილი {a.wantsPercent}%</span>
+                <span>🟢 დანაზოგი {a.savingsPercent}%</span>
               </div>
             </div>
-          );
-        })}
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ჩამოშლადი ნაწილი */}
+      {expanded && (
+        <>
+          {/* ფინანსური მიმოხილვა */}
+          {a.totalMonthlyIncome > 0 && (
+            <Card className="border-0 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800/50 dark:to-blue-900/20">
+              <CardContent className="p-2.5">
+                <div className="mb-1.5">
+                  <div className="flex justify-between text-[10px] mb-0.5">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold">შემოსავალი: {a.totalMonthlyIncome}₾</span>
+                    <span className="text-red-500 font-bold">ვალდებულებები: {a.totalMonthlyObligations}₾</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div
+                      className={cn('h-full rounded-full transition-all duration-500',
+                        a.deficitPercent > 100 ? 'bg-red-500' : a.deficitPercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'
+                      )}
+                      style={{ width: `${Math.min(a.deficitPercent, 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[8px] text-center text-muted-foreground mt-0.5">
+                    {a.deficitPercent > 100
+                      ? `🔴 ${a.deficitPercent - 100}% დეფიციტი`
+                      : `თავისუფალი: ${100 - a.deficitPercent}% (${a.monthlyBalance}₾)`}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">
+                  {a.monthlySalary > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">💼 ხელფასი:</span><span className="font-bold text-emerald-600 dark:text-emerald-400">{a.monthlySalary}₾</span></div>
+                  )}
+                  {a.monthlyDailyIncome > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">📊 ყოველდღიური:</span><span className="font-bold text-emerald-600 dark:text-emerald-400">{a.monthlyDailyIncome}₾</span></div>
+                  )}
+                  {a.billsTotal > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">📅 ბილები:</span><span className="font-bold text-red-500">{a.billsTotal}₾</span></div>
+                  )}
+                  {a.subsTotal > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">🔄 გამოწერები:</span><span className="font-bold text-red-500">{a.subsTotal}₾</span></div>
+                  )}
+                  {a.monthlyDebtPayment > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">💸 ვალები:</span><span className="font-bold text-red-500">{a.monthlyDebtPayment}₾</span></div>
+                  )}
+                  {a.monthlyLivingExpenses > 0 && (
+                    <div className="flex justify-between"><span className="text-muted-foreground">🛒 საყოფაცხოვრებო:</span><span className="font-bold text-red-500">{a.monthlyLivingExpenses}₾</span></div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* ინსაითები */}
+          {a.insights
+            .sort((x, y) => {
+              const order: Record<AlertLevel, number> = { critical: 0, warning: 1, info: 2, success: 3 };
+              return order[x.level] - order[y.level];
+            })
+            .map((insight, i) => {
+              const style = levelStyles[insight.level];
+              return (
+                <div
+                  key={i}
+                  className={cn('flex items-start gap-2 px-2.5 py-2 rounded-xl border', style.bg, style.border)}
+                >
+                  <span className="text-sm shrink-0 mt-0.5">{insight.icon}</span>
+                  <div className="min-w-0">
+                    <p className={cn('text-[11px] font-black', style.iconColor)}>{insight.title}</p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">{insight.message}</p>
+                  </div>
+                </div>
+              );
+            })}
+        </>
+      )}
     </div>
   );
 };
