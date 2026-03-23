@@ -12,7 +12,6 @@ import { DebtsManager } from '@/components/DebtsManager';
 import { BillsManager } from '@/components/BillsManager';
 import { SubscriptionsManager } from '@/components/SubscriptionsManager';
 import { LoansManager } from '@/components/LoansManager';
-import { LombardsManager } from '@/components/LombardsManager';
 import { BankLoansManager } from '@/components/BankLoansManager';
 import { StatsView } from '@/components/StatsView';
 import { UtilitiesManager } from '@/components/UtilitiesManager';
@@ -436,126 +435,6 @@ export const App: React.FC = () => {
     [state, updateState]
   );
 
-  // ლობარდი
-  const handleAddLombard = useCallback(
-    (data: { itemName: string; principal: number; monthlyInterest: number; contractNumber?: string; paymentDay: number }) => {
-      const now = Date.now();
-      const today = new Date().toISOString().split('T')[0];
-      const currentYear = new Date().getFullYear();
-
-      // ვალის შექმნა (ძირი თანხა)
-      const debtId = now;
-      const newDebt: Debt = {
-        id: debtId,
-        name: `🏪 ლობარდი: ${data.itemName}`,
-        amount: data.principal,
-        paid: false,
-        priority: 'high',
-        paidAmount: 0,
-      };
-
-      // 12 თვის ბილების შექმნა (ყოველთვიური პროცენტი)
-      const billIds: number[] = [];
-      const newBills: Bill[] = [];
-      for (let month = 0; month < 12; month++) {
-        const billId = now + 1 + month;
-        billIds.push(billId);
-        const lastDayOfMonth = new Date(currentYear, month + 1, 0).getDate();
-        const actualDay = Math.min(data.paymentDay, lastDayOfMonth);
-        const monthStr = String(month + 1).padStart(2, '0');
-        const dayStr = String(actualDay).padStart(2, '0');
-        newBills.push({
-          id: billId,
-          name: `🏪 ლობარდი %: ${data.itemName}`,
-          amount: data.monthlyInterest,
-          date: '',
-          paid: false,
-          reset_month: month,
-          dueDate: `${currentYear}-${monthStr}-${dayStr}`,
-        });
-      }
-
-      // ლობარდის ობიექტი
-      const lombard: Lombard = {
-        id: now + 100,
-        itemName: data.itemName,
-        principal: data.principal,
-        monthlyInterest: data.monthlyInterest,
-        contractNumber: data.contractNumber,
-        paymentDay: data.paymentDay,
-        debtId,
-        billIds,
-        active: true,
-        createdAt: today,
-      };
-
-      updateState({
-        ...state,
-        debts: [...state.debts, newDebt],
-        bills: [...state.bills, ...newBills],
-        lombards: [...(state.lombards || []), lombard],
-      });
-    },
-    [state, updateState]
-  );
-
-  const handleRemoveLombard = useCallback(
-    (id: number) => {
-      const lombard = (state.lombards || []).find((l) => l.id === id);
-      if (!lombard) return;
-      updateState({
-        ...state,
-        debts: state.debts.filter((d) => d.id !== lombard.debtId),
-        bills: state.bills.filter((b) => !lombard.billIds.includes(b.id)),
-        lombards: (state.lombards || []).filter((l) => l.id !== id),
-      });
-    },
-    [state, updateState]
-  );
-
-  const handleEditLombard = useCallback(
-    (id: number, updates: Partial<Lombard>) => {
-      const lombard = (state.lombards || []).find((l) => l.id === id);
-      if (!lombard) return;
-
-      let updatedDebts = state.debts;
-      let updatedBills = state.bills;
-
-      // ვალის განახლება თუ ძირი თანხა შეიცვალა
-      if (updates.principal !== undefined && updates.principal !== lombard.principal) {
-        updatedDebts = state.debts.map((d) =>
-          d.id === lombard.debtId ? { ...d, amount: updates.principal!, name: `🏪 ლობარდი: ${updates.itemName || lombard.itemName}` } : d
-        );
-      } else if (updates.itemName) {
-        updatedDebts = state.debts.map((d) =>
-          d.id === lombard.debtId ? { ...d, name: `🏪 ლობარდი: ${updates.itemName}` } : d
-        );
-      }
-
-      // ბილების განახლება თუ პროცენტი ან სახელი შეიცვალა
-      if (updates.monthlyInterest !== undefined || updates.itemName) {
-        updatedBills = state.bills.map((b) => {
-          if (!lombard.billIds.includes(b.id)) return b;
-          return {
-            ...b,
-            amount: updates.monthlyInterest ?? lombard.monthlyInterest,
-            name: `🏪 ლობარდი %: ${updates.itemName || lombard.itemName}`,
-          };
-        });
-      }
-
-      updateState({
-        ...state,
-        debts: updatedDebts,
-        bills: updatedBills,
-        lombards: (state.lombards || []).map((l) =>
-          l.id === id ? { ...l, ...updates } : l
-        ),
-      });
-    },
-    [state, updateState]
-  );
-
   // ბანკი
   const handleAddBankLoan = useCallback(
     (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; startDate: string; endDate: string }) => {
@@ -935,21 +814,12 @@ export const App: React.FC = () => {
                 />
               )}
               {debtSubTab === 'bank' && (
-                <>
-                  <BankLoansManager
-                    state={state}
-                    onAddBankLoan={handleAddBankLoan}
-                    onRemoveBankLoan={handleRemoveBankLoan}
-                    onEditBankLoan={handleEditBankLoan}
-                  />
-                  <div className="border-t border-slate-200 dark:border-slate-700 my-2" />
-                  <LombardsManager
-                    state={state}
-                    onAddLombard={handleAddLombard}
-                    onRemoveLombard={handleRemoveLombard}
-                    onEditLombard={handleEditLombard}
-                  />
-                </>
+                <BankLoansManager
+                  state={state}
+                  onAddBankLoan={handleAddBankLoan}
+                  onRemoveBankLoan={handleRemoveBankLoan}
+                  onEditBankLoan={handleEditBankLoan}
+                />
               )}
             </>
           )}
