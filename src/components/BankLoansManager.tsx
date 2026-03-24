@@ -20,6 +20,7 @@ interface BankLoansManagerProps {
     paymentDay: number;
     totalMonths: number;
     paidMonths: number;
+    thisMonthPaid: boolean;
   }) => void;
   onRemoveBankLoan: (id: number) => void;
   onEditBankLoan: (id: number, updates: Partial<BankLoan>) => void;
@@ -46,6 +47,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
   const [editName, setEditName] = useState('');
   const [editPrincipal, setEditPrincipal] = useState('');
   const [editInterest, setEditInterest] = useState('');
+  const [thisMonthAlreadyPaid, setThisMonthAlreadyPaid] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
 
   const activeLoans = useMemo(
@@ -82,6 +84,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
       paymentDay: numPayDay,
       totalMonths: numTotalMonths,
       paidMonths: numPaidMonths,
+      thisMonthPaid: thisMonthAlreadyPaid,
     });
 
     setSelectedType(null);
@@ -91,6 +94,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     setPaymentDay('');
     setLoanTotalMonths('');
     setLoanPaidMonths('');
+    setThisMonthAlreadyPaid(false);
   };
 
   const handleRemove = (loan: BankLoan) => {
@@ -412,6 +416,21 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
                 )}
               </p>
             </div>
+          )}
+
+          {/* ამ თვეს გადახდილია? */}
+          {parseInt(paymentDay) > 0 && new Date().getDate() >= (parseInt(paymentDay) || 0) && (
+            <label className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={thisMonthAlreadyPaid}
+                onChange={(e) => setThisMonthAlreadyPaid(e.target.checked)}
+                className="w-4 h-4 rounded accent-emerald-500"
+              />
+              <span className="text-[10px] font-bold text-amber-800 dark:text-amber-200">
+                ამ თვეს უკვე გადახდილია? <span className="font-normal text-amber-600 dark:text-amber-400">(თვის {paymentDay} რიცხვი გასულია)</span>
+              </span>
+            </label>
           )}
 
           <Button variant="default" onClick={handleAdd} className={cn('w-full', COMPACT_BTN)}>

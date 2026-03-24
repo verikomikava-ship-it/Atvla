@@ -438,7 +438,7 @@ export const App: React.FC = () => {
 
   // ბანკი
   const handleAddBankLoan = useCallback(
-    (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; totalMonths: number; paidMonths: number }) => {
+    (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; totalMonths: number; paidMonths: number; thisMonthPaid: boolean }) => {
       const now = Date.now();
       const today = new Date().toISOString().split('T')[0];
       const totalMonths = data.totalMonths;
@@ -470,6 +470,15 @@ export const App: React.FC = () => {
       // ბილები (ყოველთვიური პროცენტი) — 12 თვეზე recurring
       const billIds: number[] = [];
       const newBills: Bill[] = [];
+      const currentMonth = new Date().getMonth();
+
+      // რომელი თვეები უკვე გადახდილია? startMonth-დან paidMonths რაოდენობა
+      const startMonthIdx = startMonth.getMonth(); // startDate-ის თვე (0-11)
+      const paidMonthIndices = new Set<number>();
+      for (let i = 0; i < data.paidMonths; i++) {
+        paidMonthIndices.add((startMonthIdx + i) % 12);
+      }
+
       for (let month = 0; month < 12; month++) {
         const billId = now + 1 + month;
         billIds.push(billId);
@@ -478,12 +487,16 @@ export const App: React.FC = () => {
         const actualDay = Math.min(data.paymentDay, lastDay);
         const monthStr = String(month + 1).padStart(2, '0');
         const dayStr = String(actualDay).padStart(2, '0');
+
+        // წარსულის თვეები ავტომატურად გადახდილი + ამ თვე თუ მონიშნეს
+        const isPastPaid = paidMonthIndices.has(month) || (data.thisMonthPaid && month === currentMonth);
+
         newBills.push({
           id: billId,
           name: `🏦 ${label} %`,
           amount: data.monthlyInterest,
           date: '',
-          paid: false,
+          paid: isPastPaid,
           reset_month: month,
           dueDate: `${year}-${monthStr}-${dayStr}`,
         });
