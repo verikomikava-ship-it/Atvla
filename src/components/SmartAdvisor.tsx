@@ -414,12 +414,12 @@ export const SmartAdvisor: React.FC<SmartAdvisorProps> = ({ state, selectedMonth
     // სესხის ვადა
     for (const loan of state.bankLoans || []) {
       if (!loan.active) continue;
-      const end = new Date(loan.endDate + '-01');
-      const ml = (end.getFullYear() - now.getFullYear()) * 12 + (end.getMonth() - now.getMonth());
-      if (ml <= 3 && ml > 0) {
+      const paidBillsCount = state.bills.filter((b) => loan.billIds.includes(b.id) && b.paid).length;
+      const monthsRemaining = Math.max(0, loan.totalMonths - paidBillsCount);
+      if (monthsRemaining <= 3 && monthsRemaining > 0) {
         insights.push({
           level: 'info', icon: '🏦',
-          title: `სესხი მთავრდება ${ml} თვეში`,
+          title: `სესხი მთავრდება ${monthsRemaining} თვეში`,
           message: `${loan.name || loan.type} — ${loan.principal}₾`,
         });
       }

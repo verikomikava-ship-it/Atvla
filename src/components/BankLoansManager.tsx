@@ -134,13 +134,6 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     return Math.floor((target.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   };
 
-  // რამდენი თვე გავიდა startDate-დან
-  const getMonthsPassed = (startYM: string): number => {
-    const now = new Date();
-    const [sy, sm] = startYM.split('-').map(Number);
-    return (now.getFullYear() - sy) * 12 + (now.getMonth() + 1 - sm);
-  };
-
   const renderMonthCubes = (totalMonths: number, paidMonths: number, color: string) => {
     if (totalMonths <= 36) {
       // კუბიკები 12-იანი რიგებით
@@ -180,7 +173,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     const debt = state.debts.find((d) => d.id === loan.debtId);
     const paidBills = state.bills.filter((b) => loan.billIds.includes(b.id) && b.paid).length;
     const daysUntil = getDaysUntilPayment(loan.paymentDay);
-    const monthsPassed = Math.max(0, Math.min(getMonthsPassed(loan.startDate), loan.totalMonths));
+    const monthsPassed = paidBills; // ფაქტობრივად გადახდილი თვეები = paid ბილების რაოდენობა
     const debtProgress = debt ? ((debt.paidAmount || 0) / debt.amount) * 100 : 0;
 
     // ამ თვის ბილი — გადახდილია?
