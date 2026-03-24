@@ -769,6 +769,7 @@ export const App: React.FC = () => {
                   state={state}
                   selectedMonth={selectedMonth}
                   onToggleBillPaid={handleToggleBillPaid}
+                  onAddUtility={(name, amount) => handleAddBill(name, amount, true)}
                 />
               )}
               {paymentSubTab === 'subscriptions' && (

@@ -1,19 +1,24 @@
-import React, { useMemo } from 'react';
-import { AppState, Bill, UTILITY_TYPES } from '../types';
+import React, { useMemo, useState } from 'react';
+import { AppState, Bill, UTILITY_TYPES, UtilityType } from '../types';
 import { Card, CardContent } from '@/components/ui/card';
-import { Check, Zap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Check, Zap, Plus } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 interface UtilitiesManagerProps {
   state: AppState;
   selectedMonth: string;
   onToggleBillPaid: (id: number) => void;
+  onAddUtility?: (name: string, amount: number) => void;
 }
 
 export const UtilitiesManager: React.FC<UtilitiesManagerProps> = ({
   state,
   selectedMonth,
   onToggleBillPaid,
+  onAddUtility,
 }) => {
   const currentMonth = parseInt(selectedMonth || '0');
 
@@ -108,10 +113,13 @@ export const UtilitiesManager: React.FC<UtilitiesManagerProps> = ({
         </CardContent>
       </Card>
 
+      {/* კომუნალურის დამატება */}
+      {onAddUtility && <AddUtilityForm existingNames={utilityBillNames} onAdd={onAddUtility} />}
+
       {/* კომუნალურების სია */}
       {utilityBills.length === 0 ? (
         <p className="text-center text-slate-500 dark:text-slate-400 py-4 text-xs">
-          კომუნალური არ დამატებულა. ინსტალაციაში ან ყოველთვიურ გადასახადებში დაამატე.
+          კომუნალური არ დამატებულა
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -194,6 +202,66 @@ export const UtilitiesManager: React.FC<UtilitiesManagerProps> = ({
               </Card>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// კომუნალურის დამატების ფორმა
+const AddUtilityForm: React.FC<{
+  existingNames: Set<string>;
+  onAdd: (name: string, amount: number) => void;
+}> = ({ onAdd }) => {
+  const [selectedType, setSelectedType] = useState<UtilityType | null>(null);
+  const [amount, setAmount] = useState('');
+
+  const handleAdd = () => {
+    if (!selectedType) return;
+    const numAmount = parseInt(amount) || 0;
+    if (numAmount <= 0) { alert('შეიყვანე თანხა'); return; }
+
+    onAdd(`კომუნალური: ${selectedType}`, numAmount);
+    setSelectedType(null);
+    setAmount('');
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1">
+        {UTILITY_TYPES.map((u) => (
+          <button
+            key={u.key}
+            onClick={() => setSelectedType(selectedType === u.key ? null : u.key)}
+            className={cn(
+              'flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold border transition-all',
+              selectedType === u.key
+                ? 'border-teal-400 bg-teal-50 dark:bg-teal-900/30 scale-105'
+                : 'border-slate-200 dark:border-slate-700 opacity-60 hover:opacity-100'
+            )}
+            style={{ color: selectedType === u.key ? u.color : undefined }}
+          >
+            <span>{u.icon}</span>
+            <span>{u.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {selectedType && (
+        <div className="flex gap-1.5 animate-fadeIn">
+          <Input
+            type="text"
+            inputMode="numeric"
+            placeholder="თანხა ₾"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+            className="flex-1 h-8 text-xs"
+            autoFocus
+          />
+          <Button onClick={handleAdd} size="sm" className="h-8 text-xs px-3">
+            <Plus className="h-3 w-3 mr-1" /> დამატება
+          </Button>
         </div>
       )}
     </div>
