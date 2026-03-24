@@ -23,6 +23,7 @@ interface BankLoansManagerProps {
   }) => void;
   onRemoveBankLoan: (id: number) => void;
   onEditBankLoan: (id: number, updates: Partial<BankLoan>) => void;
+  onToggleBillPaid: (id: number) => void;
 }
 
 
@@ -31,6 +32,7 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
   onAddBankLoan,
   onRemoveBankLoan,
   onEditBankLoan,
+  onToggleBillPaid,
 }) => {
   const [selectedType, setSelectedType] = useState<BankProductType | null>(null);
   const [customName, setCustomName] = useState('');
@@ -177,6 +179,14 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     const monthsPassed = Math.max(0, Math.min(getMonthsPassed(loan.startDate), loan.totalMonths));
     const debtProgress = debt ? ((debt.paidAmount || 0) / debt.amount) * 100 : 0;
 
+    // ამ თვის ბილი — გადახდილია?
+    const currentMonth = new Date().getMonth();
+    const currentDay = new Date().getDate();
+    const thisMonthBill = state.bills.find((b) => loan.billIds.includes(b.id) && (b.reset_month ?? 0) === currentMonth);
+    const thisMonthPaid = thisMonthBill?.paid || false;
+    // ვადაგასული? — გადახდის დღე გავიდა და ამ თვეში არ არის გადახდილი
+    const isOverdue = !thisMonthPaid && currentDay > loan.paymentDay;
+
     if (loan.id === editingId) {
       return (
         <Card key={loan.id} className="p-2 border-l-4" style={{ borderLeftColor: typeInfo?.color, backgroundColor: `${typeInfo?.color}08` }}>
@@ -258,17 +268,68 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
                 {renderMonthCubes(loan.totalMonths, monthsPassed, typeInfo?.color || '#64748b')}
               </div>
 
-              {/* შემდეგი გადახდა */}
-              {loan.active && (
+              {/* ამ თვის გადახდის სტატუსი */}
+              {loan.active && thisMonthPaid && (
                 <div className="flex items-center gap-1 mt-1.5">
-                  <Calendar className="h-3 w-3" style={{
-                    color: daysUntil <= 3 ? '#f87171' : daysUntil <= 7 ? '#fbbf24' : '#10b981'
-                  }} />
-                  <p className="text-[10px] font-bold" style={{
-                    color: daysUntil <= 3 ? '#f87171' : daysUntil <= 7 ? '#fbbf24' : '#10b981'
-                  }}>
-                    შემდეგი გადახდა: {daysUntil} დღეში (თვის {loan.paymentDay} რიცხვი)
+                  <Check className="h-3 w-3 text-emerald-500" />
+                  <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                    ✅ ამ თვეს გადახდილია
                   </p>
+                </div>
+              )}
+
+              {/* ვადაგასული — არ არის გადახდილი */}
+              {loan.active && isOverdue && (
+                <div className="mt-1.5 p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">🚨</span>
+                      <p className="text-[10px] font-bold text-red-600 dark:text-red-400">
+                        {currentDay - loan.paymentDay} დღით დაგვიანებული!
+                      </p>
+                    </div>
+                    {thisMonthBill && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onToggleBillPaid(thisMonthBill.id)}
+                        className="h-6 text-[9px] px-2 border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30"
+                      >
+                        გადახდილია?
+                      </Button>
+                    )}
+                  </div>
+                  {loan.lateFee && (
+                    <p className="text-[9px] text-red-500 dark:text-red-400 mt-0.5">
+                      ⚠️ ჯარიმა: {loan.lateFee}₾ + {loan.dailyPenaltyRate || 0.5}%/დღე
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* შემდეგი გადახდა — თუ ჯერ ვადა არ გასულა და არ არის გადახდილი */}
+              {loan.active && !thisMonthPaid && !isOverdue && (
+                <div className="flex items-center justify-between mt-1.5">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-3 w-3" style={{
+                      color: daysUntil <= 3 ? '#f87171' : daysUntil <= 7 ? '#fbbf24' : '#10b981'
+                    }} />
+                    <p className="text-[10px] font-bold" style={{
+                      color: daysUntil <= 3 ? '#f87171' : daysUntil <= 7 ? '#fbbf24' : '#10b981'
+                    }}>
+                      {daysUntil} დღეში (თვის {loan.paymentDay})
+                    </p>
+                  </div>
+                  {thisMonthBill && daysUntil <= 7 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onToggleBillPaid(thisMonthBill.id)}
+                      className="h-6 text-[9px] px-2 border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
+                    >
+                      გადავიხადე
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

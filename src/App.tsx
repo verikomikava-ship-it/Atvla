@@ -828,6 +828,7 @@ export const App: React.FC = () => {
                   onAddBankLoan={handleAddBankLoan}
                   onRemoveBankLoan={handleRemoveBankLoan}
                   onEditBankLoan={handleEditBankLoan}
+                  onToggleBillPaid={handleToggleBillPaid}
                 />
               )}
             </>
