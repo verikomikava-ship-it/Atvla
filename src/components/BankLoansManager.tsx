@@ -18,24 +18,13 @@ interface BankLoansManagerProps {
     principal: number;
     monthlyInterest: number;
     paymentDay: number;
-    startDate: string;
-    endDate: string;
+    totalMonths: number;
+    paidMonths: number;
   }) => void;
   onRemoveBankLoan: (id: number) => void;
   onEditBankLoan: (id: number, updates: Partial<BankLoan>) => void;
 }
 
-const monthsBetween = (start: string, end: string): number => {
-  const [sy, sm] = start.split('-').map(Number);
-  const [ey, em] = end.split('-').map(Number);
-  return (ey - sy) * 12 + (em - sm) + 1;
-};
-
-const formatYM = (ym: string): string => {
-  const [y, m] = ym.split('-');
-  const months = ['იან', 'თებ', 'მარ', 'აპრ', 'მაი', 'ივნ', 'ივლ', 'აგვ', 'სექ', 'ოქტ', 'ნოე', 'დეკ'];
-  return `${months[parseInt(m) - 1]} ${y}`;
-};
 
 export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
   state,
@@ -48,8 +37,8 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
   const [principal, setPrincipal] = useState('');
   const [monthlyInterest, setMonthlyInterest] = useState('');
   const [paymentDay, setPaymentDay] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [loanTotalMonths, setLoanTotalMonths] = useState('');
+  const [loanPaidMonths, setLoanPaidMonths] = useState('');
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
@@ -74,12 +63,14 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     const numPrincipal = parseInt(principal) || 0;
     const numInterest = parseInt(monthlyInterest) || 0;
     const numPayDay = parseInt(paymentDay) || 0;
+    const numTotalMonths = parseInt(loanTotalMonths) || 0;
+    const numPaidMonths = parseInt(loanPaidMonths) || 0;
     if (selectedType === 'სხვა' && !customName.trim()) { alert('შეიყვანე სესხის სახელი'); return; }
     if (numPrincipal <= 0) { alert('შეიყვანე სწორი ძირი თანხა'); return; }
     if (numInterest <= 0) { alert('შეიყვანე სწორი პროცენტის თანხა'); return; }
     if (numPayDay < 1 || numPayDay > 31) { alert('შეიყვანე გადახდის დღე (1-31)'); return; }
-    if (!startDate || !endDate) { alert('შეიყვანე ვადის დასაწყისი და დასასრული'); return; }
-    if (startDate > endDate) { alert('დასაწყისი უნდა იყოს დასასრულამდე'); return; }
+    if (numTotalMonths < 1) { alert('შეიყვანე სესხის ვადა (თვეები)'); return; }
+    if (numPaidMonths > numTotalMonths) { alert('გადახდილი თვეები არ უნდა აღემატებოდეს სულ თვეებს'); return; }
 
     onAddBankLoan({
       type: selectedType,
@@ -87,8 +78,8 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
       principal: numPrincipal,
       monthlyInterest: numInterest,
       paymentDay: numPayDay,
-      startDate,
-      endDate,
+      totalMonths: numTotalMonths,
+      paidMonths: numPaidMonths,
     });
 
     setSelectedType(null);
@@ -96,8 +87,8 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
     setPrincipal('');
     setMonthlyInterest('');
     setPaymentDay('');
-    setStartDate('');
-    setEndDate('');
+    setLoanTotalMonths('');
+    setLoanPaidMonths('');
   };
 
   const handleRemove = (loan: BankLoan) => {
@@ -234,8 +225,10 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
               </div>
 
               {/* ვადა */}
-              <div className="text-[10px] text-slate-600 dark:text-slate-400 mt-1">
-                📅 {formatYM(loan.startDate)} — {formatYM(loan.endDate)} ({loan.totalMonths} თვე)
+              <div className="text-[10px] text-slate-600 dark:text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                <span>📅 {loan.totalMonths} თვე</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{monthsPassed} გადახდილი</span>
+                <span className="font-bold text-orange-600 dark:text-orange-400">{Math.max(0, loan.totalMonths - monthsPassed)} დარჩა</span>
               </div>
 
               {/* ძირის დაფარვის პროგრესი */}
@@ -340,19 +333,24 @@ export const BankLoansManager: React.FC<BankLoansManagerProps> = ({
 
           <div className="flex gap-1.5">
             <div className="flex-1">
-              <label className="text-[10px] text-slate-600 dark:text-slate-400 mb-0.5 block">ვადის დასაწყისი *</label>
-              <Input type="month" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={COMPACT_INPUT} />
+              <label className="text-[10px] text-slate-600 dark:text-slate-400 mb-0.5 block">სულ რამდენი თვე? *</label>
+              <Input type="text" inputMode="numeric" placeholder="მაგ: 24" value={loanTotalMonths} onChange={(e) => setLoanTotalMonths(e.target.value)} className={COMPACT_INPUT} />
             </div>
             <div className="flex-1">
-              <label className="text-[10px] text-slate-600 dark:text-slate-400 mb-0.5 block">ვადის დასასრული *</label>
-              <Input type="month" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={COMPACT_INPUT} />
+              <label className="text-[10px] text-slate-600 dark:text-slate-400 mb-0.5 block">რამდენი გადახდილი?</label>
+              <Input type="text" inputMode="numeric" placeholder="მაგ: 6" value={loanPaidMonths} onChange={(e) => setLoanPaidMonths(e.target.value)} className={COMPACT_INPUT} />
             </div>
           </div>
 
-          {startDate && endDate && startDate <= endDate && (
-            <p className="text-[10px] text-slate-600 dark:text-slate-400 text-center">
-              ვადა: <span className="font-bold text-slate-800 dark:text-slate-200">{monthsBetween(startDate, endDate)} თვე</span>
-            </p>
+          {parseInt(loanTotalMonths) > 0 && (
+            <div className="text-[10px] text-center space-y-0.5">
+              <p className="text-slate-600 dark:text-slate-400">
+                ვადა: <span className="font-bold text-slate-800 dark:text-slate-200">{loanTotalMonths} თვე</span>
+                {parseInt(loanPaidMonths) > 0 && (
+                  <> · გადახდილი: <span className="font-bold text-emerald-600">{loanPaidMonths}</span> · დარჩა: <span className="font-bold text-orange-600">{Math.max(0, parseInt(loanTotalMonths) - (parseInt(loanPaidMonths) || 0))}</span></>
+                )}
+              </p>
+            </div>
           )}
 
           <Button variant="default" onClick={handleAdd} className={cn('w-full', COMPACT_BTN)}>

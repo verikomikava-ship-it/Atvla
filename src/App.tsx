@@ -438,12 +438,18 @@ export const App: React.FC = () => {
 
   // ბანკი
   const handleAddBankLoan = useCallback(
-    (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; startDate: string; endDate: string }) => {
+    (data: { type: BankProductType; name?: string; principal: number; monthlyInterest: number; paymentDay: number; totalMonths: number; paidMonths: number }) => {
       const now = Date.now();
       const today = new Date().toISOString().split('T')[0];
-      const [sy, sm] = data.startDate.split('-').map(Number);
-      const [ey, em] = data.endDate.split('-').map(Number);
-      const totalMonths = (ey - sy) * 12 + (em - sm) + 1;
+      const totalMonths = data.totalMonths;
+
+      // startDate/endDate ავტომატურად გამოითვლება paidMonths-დან
+      const startMonth = new Date();
+      startMonth.setMonth(startMonth.getMonth() - data.paidMonths);
+      const endMonth = new Date(startMonth);
+      endMonth.setMonth(endMonth.getMonth() + totalMonths - 1);
+      const startDate = `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}`;
+      const endDate = `${endMonth.getFullYear()}-${String(endMonth.getMonth() + 1).padStart(2, '0')}`;
 
       const typeLabel = data.type;
       const label = data.name ? `${typeLabel}: ${data.name}` : typeLabel;
@@ -490,8 +496,8 @@ export const App: React.FC = () => {
         principal: data.principal,
         monthlyInterest: data.monthlyInterest,
         paymentDay: data.paymentDay,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        startDate,
+        endDate,
         totalMonths,
         debtId,
         billIds,
