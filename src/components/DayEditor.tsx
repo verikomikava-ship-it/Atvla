@@ -64,6 +64,7 @@ interface DayEditorProps {
 export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClose }) => {
   const [formData, setFormData] = useState<DayData>(EMPTY_DAY);
   const [eventsOpen, setEventsOpen] = useState(false);
+  const [userPlanOrder, setUserPlanOrder] = useState<string[]>([]); // მომხმარებლის პრიორიტეტი
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1041,14 +1042,39 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
             const deficit = dailyPlanTotal - dailyBudget;
             const deficitPercent = dailyBudget > 0 ? Math.round((dailyPlanTotal / dailyBudget) * 100) : 999;
 
-            // პრიორიტეტული დალაგება: ვადა ახლოს + ბილები > ვალები > გამოწერები
-            const priorityOrder: Record<string, number> = { bill: 0, debt: 1, subscription: 2 };
+            // პრიორიტეტული დალაგება: მომხმარებლის რეორდერი > ვადა > ტიპი
+            const typeOrder: Record<string, number> = { bill: 0, debt: 1, subscription: 2 };
             const sortedPlan = [...dailyPlan].sort((a, b) => {
-              // ჯერ ვადით (ვინც ახლოსაა — პირველი)
+              const keyA = `${a.targetType}-${a.targetId}`;
+              const keyB = `${b.targetType}-${b.targetId}`;
+              const idxA = userPlanOrder.indexOf(keyA);
+              const idxB = userPlanOrder.indexOf(keyB);
+              // თუ მომხმარებელმა დაალაგა — მისი რიგი
+              if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+              if (idxA !== -1) return -1;
+              if (idxB !== -1) return 1;
+              // ვადაგასული პირველი
+              if (a.overdue && !b.overdue) return -1;
+              if (!a.overdue && b.overdue) return 1;
+              // ვადით
               if (a.daysLeft !== b.daysLeft) return a.daysLeft - b.daysLeft;
-              // მერე ტიპით
-              return (priorityOrder[a.targetType] ?? 3) - (priorityOrder[b.targetType] ?? 3);
+              // ტიპით
+              return (typeOrder[a.targetType] ?? 3) - (typeOrder[b.targetType] ?? 3);
             });
+
+            // userPlanOrder ინიციალიზაცია თუ ცარიელია
+            if (userPlanOrder.length === 0 && sortedPlan.length > 0) {
+              setUserPlanOrder(sortedPlan.map(e => `${e.targetType}-${e.targetId}`));
+            }
+
+            const movePlanItem = (index: number, direction: 'up' | 'down') => {
+              const keys = sortedPlan.map(e => `${e.targetType}-${e.targetId}`);
+              const newIdx = direction === 'up' ? index - 1 : index + 1;
+              if (newIdx < 0 || newIdx >= keys.length) return;
+              const newOrder = [...keys];
+              [newOrder[index], newOrder[newIdx]] = [newOrder[newIdx], newOrder[index]];
+              setUserPlanOrder(newOrder);
+            };
 
             // რეალისტური გეგმა: რა ეტევა ბიუჯეტში
             let budgetLeft = dailyBudget;
@@ -1114,7 +1140,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
               )}
 
               <div className="p-1.5 space-y-1">
-                {sortedPlan.map((entry) => {
+                {sortedPlan.map((entry, planIndex) => {
                   const entryKey = `${entry.targetType}-${entry.targetId}`;
                   const checked = isDailyPlanChecked(entry);
                   const savedItem = (formData.dailyPlanDone || []).find(
@@ -1149,7 +1175,22 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                           : typeColors[entry.targetType] || 'border-slate-200 bg-white dark:bg-slate-800'
                       )}
                     >
-                      {/* პრიორიტეტის ინდიკატორი */}
+                      {/* პრიორიტეტის ნომერი + ისრები */}
+                      <div className="flex flex-col items-center shrink-0 gap-0">
+                        {planIndex > 0 && !checked && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); movePlanItem(planIndex, 'up'); }}
+                            className="text-[8px] text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 leading-none p-0">▲</button>
+                        )}
+                        <span className={cn('text-[9px] font-black w-4 text-center leading-none',
+                          planIndex === 0 ? 'text-indigo-600 dark:text-indigo-400' : 'text-muted-foreground'
+                        )}>{planIndex + 1}</span>
+                        {planIndex < sortedPlan.length - 1 && !checked && (
+                          <button type="button" onClick={(e) => { e.stopPropagation(); movePlanItem(planIndex, 'down'); }}
+                            className="text-[8px] text-muted-foreground hover:text-indigo-600 dark:hover:text-indigo-400 leading-none p-0">▼</button>
+                        )}
+                      </div>
+
+                      {/* სტატუს ბეჯები */}
                       {!canAfford && !checked && (
                         <span className="text-[8px] shrink-0" title={isAffordable ? 'ეტევა ბიუჯეტში' : 'ბიუჯეტს აჭარბებს'}>
                           {isAffordable ? '✅' : '⏸️'}
