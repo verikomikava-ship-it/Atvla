@@ -1103,6 +1103,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                     'text-[10px] font-black uppercase tracking-wider',
                     canAfford ? 'text-indigo-700 dark:text-indigo-300' : 'text-orange-700 dark:text-orange-300'
                   )}>დღიური გეგმა</span>
+                  <span className="text-[8px] text-muted-foreground font-normal normal-case tracking-normal">— გადადე ეს თანხები დღეს</span>
                 </div>
                 <span className={cn(
                   'text-[10px] font-bold',
@@ -1211,21 +1212,54 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                         )}>
                           {checked && <Check className="w-3 h-3 text-white" />}
                         </div>
-                        <span className="text-xs">{entry.icon}</span>
                         <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            'text-[11px] font-bold truncate',
-                            checked && 'line-through text-muted-foreground',
-                            !canAfford && !isAffordable && !checked && 'text-slate-400 dark:text-slate-500'
-                          )}>
-                            {entry.name}
-                          </p>
-                          <p className="text-[9px] text-muted-foreground">
-                            {isOverdue ? <span className="text-red-600 font-black">⚠️ ვადაგასულია!</span> : isUrgent ? <span className="text-red-500 font-bold">{entry.daysLeft} დღე!</span> : <>{entry.daysLeft} დღე დარჩა</>}
-                            {entry.alreadySaved > 0 && ` · ${entry.alreadySaved}₾ გადადებულია`}
-                            {' · '}{entry.remaining}₾ სულ
-                          </p>
+                          {/* სახელი + ტიპის ბეჯი */}
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs">{entry.icon}</span>
+                            <p className={cn(
+                              'text-[11px] font-bold truncate',
+                              checked && 'line-through text-muted-foreground',
+                              !canAfford && !isAffordable && !checked && 'text-slate-400 dark:text-slate-500'
+                            )}>
+                              {entry.name}
+                            </p>
+                            <span className={cn('text-[7px] px-1 py-0.5 rounded font-bold shrink-0',
+                              entry.targetType === 'bill' ? 'bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-400'
+                              : entry.targetType === 'debt' ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
+                              : 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-400'
+                            )}>
+                              {entry.targetType === 'bill' ? 'გადასახადი' : entry.targetType === 'debt' ? 'ვალი' : 'გამოწერა'}
+                            </span>
+                          </div>
+                          {/* ვადა + პროგრესი */}
+                          <div className="mt-0.5">
+                            <p className="text-[9px] text-muted-foreground">
+                              {isOverdue
+                                ? <span className="text-red-600 font-black">⚠️ ვადაგასულია! გადაიხადე დღეს!</span>
+                                : isUrgent
+                                ? <span className="text-red-500 font-bold">🔥 {entry.daysLeft} დღე დარჩა — სასწრაფო!</span>
+                                : <>{entry.daysLeft} დღე დარჩა · ვადა: {new Date(entry.dueDate).toLocaleDateString('ka-GE', { day: 'numeric', month: 'short' })}</>
+                              }
+                            </p>
+                            {/* პროგრეს ბარი — რამდენი გადადებულია */}
+                            {entry.totalAmount > 0 && (
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                  <div
+                                    className={cn('h-full rounded-full transition-all',
+                                      checked ? 'bg-emerald-500' : 'bg-indigo-400 dark:bg-indigo-500'
+                                    )}
+                                    style={{ width: `${Math.min(100, ((entry.alreadySaved + (checked ? (savedAmount || entry.dailyAmount) : 0)) / entry.totalAmount) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="text-[8px] text-muted-foreground shrink-0">
+                                  {entry.alreadySaved + (checked ? (savedAmount || entry.dailyAmount) : 0)}₾/{entry.totalAmount}₾
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         </div>
+                        {/* დღევანდელი თანხა */}
                         <div className="text-right shrink-0">
                           <p className={cn(
                             'text-sm font-black',
@@ -1236,7 +1270,9 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                             {checked ? savedAmount : entry.dailyAmount}₾
                           </p>
                           <p className="text-[8px] text-muted-foreground">
-                            {checked && savedAmount > entry.dailyAmount ? `+${savedAmount - entry.dailyAmount}₾ წინსწრ.` : 'დღეს'}
+                            {checked
+                              ? savedAmount > entry.dailyAmount ? `+${savedAmount - entry.dailyAmount}₾ წინსწრ.` : '✓ გადადებულია'
+                              : 'დღეს გადადე'}
                           </p>
                         </div>
                       </button>
