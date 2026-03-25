@@ -616,13 +616,16 @@ export const App: React.FC = () => {
   // ობოლი მონაცემების გაწმენდა
   const handleCleanOrphans = useCallback((): number => {
     let removed = 0;
+
+    // აქტიური ბანკის სესხის ბილების ID-ები
     const activeLoanBillIds = new Set<number>();
+    const activeLoanDebtIds = new Set<number>();
     for (const loan of state.bankLoans || []) {
       if (loan.active) {
         for (const bid of loan.billIds) activeLoanBillIds.add(bid);
+        activeLoanDebtIds.add(loan.debtId);
       }
     }
-    const activeDebtIds = new Set(state.debts.map(d => d.id));
 
     // ობოლი ბილები: ბანკის სესხის ბილი რომლის სესხი აღარ აქტიურია
     const cleanBills = state.bills.filter(b => {
@@ -634,7 +637,18 @@ export const App: React.FC = () => {
       return true;
     });
 
+    // ობოლი ვალები: 🏦 ვალი რომლის ბანკის სესხი აღარ არსებობს
+    const cleanDebts = state.debts.filter(d => {
+      const isBankDebt = d.name.startsWith('🏦');
+      if (isBankDebt && !activeLoanDebtIds.has(d.id)) {
+        removed++;
+        return false;
+      }
+      return true;
+    });
+
     // ობოლი ბანკის სესხები: რომლის ვალი აღარ არსებობს
+    const activeDebtIds = new Set(cleanDebts.map(d => d.id));
     const cleanLoans = (state.bankLoans || []).filter(l => {
       if (!activeDebtIds.has(l.debtId)) {
         removed++;
@@ -643,8 +657,9 @@ export const App: React.FC = () => {
       return true;
     });
 
+    // ნაპოვნი ობოლები — აჩვენე რა წაიშალა
     if (removed > 0) {
-      updateState({ ...state, bills: cleanBills, bankLoans: cleanLoans });
+      updateState({ ...state, debts: cleanDebts, bills: cleanBills, bankLoans: cleanLoans });
     }
     return removed;
   }, [state, updateState]);
