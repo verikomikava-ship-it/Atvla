@@ -1124,7 +1124,8 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                   const smartExtra = getSmartExtraAmount(entry);
                   const smartTotal = entry.dailyAmount + smartExtra;
                   const isAffordable = affordable.has(entryKey);
-                  const isUrgent = entry.daysLeft <= 3;
+                  const isOverdue = entry.overdue === true;
+                  const isUrgent = !isOverdue && entry.daysLeft <= 3;
 
                   const typeColors: Record<string, string> = {
                     bill: 'border-cyan-400 bg-cyan-50 dark:bg-cyan-900/20',
@@ -1139,6 +1140,8 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                         'flex items-center gap-1 px-2 py-1.5 rounded-xl border transition-all',
                         checked
                           ? 'border-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 opacity-60'
+                          : isOverdue
+                          ? 'border-red-500 bg-red-100 dark:bg-red-900/30 ring-2 ring-red-400 dark:ring-red-600 animate-pulse'
                           : !canAfford && !isAffordable
                           ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50 opacity-50'
                           : isUrgent
@@ -1177,7 +1180,7 @@ export const DayEditor: React.FC<DayEditorProps> = ({ date, state, onSave, onClo
                             {entry.name}
                           </p>
                           <p className="text-[9px] text-muted-foreground">
-                            {isUrgent ? <span className="text-red-500 font-bold">{entry.daysLeft} დღე!</span> : <>{entry.daysLeft} დღე დარჩა</>}
+                            {isOverdue ? <span className="text-red-600 font-black">⚠️ ვადაგასულია!</span> : isUrgent ? <span className="text-red-500 font-bold">{entry.daysLeft} დღე!</span> : <>{entry.daysLeft} დღე დარჩა</>}
                             {entry.alreadySaved > 0 && ` · ${entry.alreadySaved}₾ გადადებულია`}
                             {' · '}{entry.remaining}₾ სულ
                           </p>

@@ -280,6 +280,7 @@ export type DailyPlanEntry = {
   dailyAmount: number;
   dueDate: string;
   icon: string;
+  overdue?: boolean; // ვადაგასულია?
 };
 
 export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[] => {
@@ -304,17 +305,14 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     return saved;
   };
 
-  // 1. ყოველთვიური გადასახადები (bills) — მხოლოდ უახლოესი თვის თითოეული სახელისთვის
+  // 1. ყოველთვიური გადასახადები (bills) — უახლოესი + ვადაგასული
   const billsByName: Record<string, typeof state.bills[0]> = {};
   for (const bill of state.bills) {
     if (bill.paid) continue;
     if (!bill.dueDate) continue;
 
-    const due = new Date(bill.dueDate);
-    due.setHours(0, 0, 0, 0);
-    if (due.getTime() <= today.getTime()) continue;
-
     const existing = billsByName[bill.name];
+    // ვადაგასულებს პრიორიტეტი აქვს, სხვა შემთხვევაში უახლოესი
     if (!existing || bill.dueDate < existing.dueDate!) {
       billsByName[bill.name] = bill;
     }
@@ -324,6 +322,7 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     const due = new Date(bill.dueDate!);
     due.setHours(0, 0, 0, 0);
     const daysLeft = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const isOverdue = daysLeft <= 0;
 
     const saved = getSaved(bill.id, 'bill');
     const remaining = Math.max(0, bill.amount - saved);
@@ -332,18 +331,19 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     plans.push({
       targetId: bill.id,
       targetType: 'bill',
-      name: bill.name,
+      name: isOverdue ? `⚠️ ${bill.name}` : bill.name,
       totalAmount: bill.amount,
       alreadySaved: saved,
       remaining,
-      daysLeft,
-      dailyAmount: Math.ceil(remaining / daysLeft),
+      daysLeft: isOverdue ? 0 : daysLeft,
+      dailyAmount: isOverdue ? remaining : Math.ceil(remaining / daysLeft),
       dueDate: bill.dueDate!,
-      icon: '📅',
+      icon: isOverdue ? '🚨' : '📅',
+      overdue: isOverdue,
     });
   }
 
-  // 2. ვალები (debts)
+  // 2. ვალები (debts) — ვადაგასულიც ჩართულია
   for (const debt of state.debts) {
     if (debt.paid) continue;
     if (!debt.dueDate) continue;
@@ -352,8 +352,7 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     due.setHours(0, 0, 0, 0);
     const diffMs = due.getTime() - today.getTime();
     const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-    if (daysLeft <= 0) continue;
+    const isOverdue = daysLeft <= 0;
 
     const actualRemaining = debt.amount - (debt.paidAmount || 0);
     if (actualRemaining <= 0) continue;
@@ -365,14 +364,15 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     plans.push({
       targetId: debt.id,
       targetType: 'debt',
-      name: debt.name,
+      name: isOverdue ? `⚠️ ${debt.name}` : debt.name,
       totalAmount: actualRemaining,
       alreadySaved: saved,
       remaining,
-      daysLeft,
-      dailyAmount: Math.ceil(remaining / daysLeft),
+      daysLeft: isOverdue ? 0 : daysLeft,
+      dailyAmount: isOverdue ? remaining : Math.ceil(remaining / daysLeft),
       dueDate: debt.dueDate,
-      icon: '💸',
+      icon: isOverdue ? '🚨' : '💸',
+      overdue: isOverdue,
     });
   }
 
@@ -386,7 +386,7 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     const diffMs = due.getTime() - today.getTime();
     const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-    if (daysLeft <= 0) continue;
+    const isOverdue = daysLeft <= 0;
 
     const saved = getSaved(sub.id, 'subscription');
     const remaining = Math.max(0, sub.amount - saved);
@@ -395,18 +395,23 @@ export const getDailyPlan = (state: AppState, dateStr: string): DailyPlanEntry[]
     plans.push({
       targetId: sub.id,
       targetType: 'subscription',
-      name: sub.name,
+      name: isOverdue ? `⚠️ ${sub.name}` : sub.name,
       totalAmount: sub.amount,
       alreadySaved: saved,
       remaining,
-      daysLeft,
-      dailyAmount: Math.ceil(remaining / daysLeft),
+      daysLeft: isOverdue ? 0 : daysLeft,
+      dailyAmount: isOverdue ? remaining : Math.ceil(remaining / daysLeft),
       dueDate: sub.dueDate,
-      icon: '🔄',
+      icon: isOverdue ? '🚨' : '🔄',
+      overdue: isOverdue,
     });
   }
 
-  // დალაგება ვადის მიხედვით (უახლოესი პირველი)
-  plans.sort((a, b) => a.daysLeft - b.daysLeft);
+  // დალაგება — ვადაგასული პირველი, შემდეგ უახლოესი
+  plans.sort((a, b) => {
+    if (a.overdue && !b.overdue) return -1;
+    if (!a.overdue && b.overdue) return 1;
+    return a.daysLeft - b.daysLeft;
+  });
   return plans;
 };
