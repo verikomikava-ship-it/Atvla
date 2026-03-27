@@ -47,6 +47,10 @@ export const App: React.FC = () => {
   const [debtSubTab, setDebtSubTab] = useState<'personal' | 'bank'>('personal');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showMotivation, setShowMotivation] = useState(false);
+  const [showMotivationEditor, setShowMotivationEditor] = useState(false);
+  const [editMotivationMsg, setEditMotivationMsg] = useState('');
+  const [editMotivationHour, setEditMotivationHour] = useState(9);
 
   // Firestore სინქრონიზაცია
   const isRemoteUpdate = useRef(false);
@@ -66,6 +70,26 @@ export const App: React.FC = () => {
   }, [state, syncToFirestore]);
 
   const stats = useMemo(() => calculateStats(state), [state]);
+
+  // სამოტივაციო წერილის დღიური ჩვენება
+  useEffect(() => {
+    const msg = state.profile?.motivationalMessage;
+    if (!msg || !state.profile?.setupCompleted) return;
+
+    const hour = state.profile.motivationHour ?? 9;
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const lastShown = localStorage.getItem('motivation_last_shown');
+
+    // თუ დღეს უკვე ნაჩვენებია, აღარ აჩვენო
+    if (lastShown === todayStr) return;
+
+    // თუ საათი მოვიდა ან გადაცდენილია
+    if (now.getHours() >= hour) {
+      setShowMotivation(true);
+      localStorage.setItem('motivation_last_shown', todayStr);
+    }
+  }, [state.profile]);
 
   const handleSetupComplete = useCallback(
     (profile: UserProfile, bills: Bill[], setupDebts?: Debt[], setupLombards?: Lombard[], setupBankLoans?: BankLoan[]) => {
@@ -1082,7 +1106,18 @@ export const App: React.FC = () => {
         </div>
       </aside>
 
-      <ToolsMenu state={state} onImport={handleImportData} onReset={handleResetData} onRerunSetup={handleRerunSetup} onCleanOrphans={handleCleanOrphans} />
+      <ToolsMenu
+        state={state}
+        onImport={handleImportData}
+        onReset={handleResetData}
+        onRerunSetup={handleRerunSetup}
+        onCleanOrphans={handleCleanOrphans}
+        onEditMotivation={() => {
+          setEditMotivationMsg(state.profile?.motivationalMessage || '');
+          setEditMotivationHour(state.profile?.motivationHour ?? 9);
+          setShowMotivationEditor(true);
+        }}
+      />
 
       {/* Theme toggle */}
       <button
@@ -1132,6 +1167,105 @@ export const App: React.FC = () => {
           onSave={handleSaveDay}
           onClose={handleCloseEditor}
         />
+      )}
+
+      {/* სამოტივაციო წერილის მოდალი */}
+      {showMotivation && state.profile?.motivationalMessage && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowMotivation(false)}>
+          <div
+            className="bg-gradient-to-br from-purple-600 via-pink-600 to-orange-500 rounded-3xl p-1 max-w-sm w-full animate-fadeIn shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="bg-white dark:bg-slate-900 rounded-[22px] p-6 space-y-4">
+              <div className="text-center">
+                <div className="text-4xl mb-2">💌</div>
+                <h2 className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-600">
+                  წერილი შენს თავს
+                </h2>
+                <p className="text-[10px] text-slate-400 mt-1">ყოველდღიური შეხსენება</p>
+              </div>
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
+                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                  {state.profile.motivationalMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMotivation(false)}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-sm hover:opacity-90 transition-opacity"
+              >
+                💪 გავიგე, წავედი!
+              </button>
+              <button
+                onClick={() => {
+                  setShowMotivation(false);
+                  setEditMotivationMsg(state.profile.motivationalMessage || '');
+                  setEditMotivationHour(state.profile.motivationHour ?? 9);
+                  setShowMotivationEditor(true);
+                }}
+                className="w-full text-[10px] text-slate-400 hover:text-purple-500 transition-colors"
+              >
+                ✏️ წერილის რედაქტირება
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* სამოტივაციო წერილის რედაქტორი */}
+      {showMotivationEditor && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onClick={() => setShowMotivationEditor(false)}>
+          <div
+            className="bg-white dark:bg-slate-900 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-center">
+              <div className="text-3xl mb-1">💌</div>
+              <h2 className="text-base font-bold text-slate-800 dark:text-slate-200">სამოტივაციო წერილი</h2>
+            </div>
+            <textarea
+              value={editMotivationMsg}
+              onChange={e => setEditMotivationMsg(e.target.value)}
+              className="w-full min-h-[100px] resize-none rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="დაუწერე წერილი შენს თავს..."
+            />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500">⏰ საათი:</span>
+              <select
+                value={editMotivationHour}
+                onChange={e => setEditMotivationHour(parseInt(e.target.value))}
+                className="bg-white dark:bg-slate-800 text-sm px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700"
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowMotivationEditor(false)}
+                className="flex-1 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                გაუქმება
+              </button>
+              <button
+                onClick={() => {
+                  updateState({
+                    ...state,
+                    profile: {
+                      ...state.profile,
+                      motivationalMessage: editMotivationMsg.trim() || undefined,
+                      motivationHour: editMotivationHour,
+                    },
+                  });
+                  setShowMotivationEditor(false);
+                }}
+                className="flex-1 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold text-sm hover:opacity-90"
+              >
+                შენახვა
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

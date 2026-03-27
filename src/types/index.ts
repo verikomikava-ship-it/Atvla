@@ -308,6 +308,9 @@ export type UserProfile = {
   additionalIncomes: AdditionalIncome[];
   // გამოთვლილი დღიური ბიუჯეტი
   dailyBudget: number;
+  // სამოტივაციო წერილი
+  motivationalMessage?: string;    // მომხმარებლის წერილი საკუთარ თავს
+  motivationHour?: number;         // რა საათზე აჩვენოს (default: 9)
 };
 
 export type AppState = {

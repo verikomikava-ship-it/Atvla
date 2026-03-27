@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { exportData, importData } from '../utils/storage';
 import { AppState } from '../types';
-import { Settings, Save, FolderOpen, Trash2, RotateCcw, Sparkles } from 'lucide-react';
+import { Settings, Save, FolderOpen, Trash2, RotateCcw, Sparkles, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface ToolsMenuProps {
@@ -10,9 +10,10 @@ interface ToolsMenuProps {
   onReset: () => void;
   onRerunSetup: () => void;
   onCleanOrphans?: () => number; // returns count of removed items
+  onEditMotivation?: () => void;
 }
 
-export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset, onRerunSetup, onCleanOrphans }) => {
+export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset, onRerunSetup, onCleanOrphans, onEditMotivation }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [pos, setPos] = useState(() => {
     try {
@@ -173,6 +174,20 @@ export const ToolsMenu: React.FC<ToolsMenuProps> = ({ state, onImport, onReset, 
             >
               <Sparkles className="h-4 w-4 mr-2" />
               გაწმენდა
+            </Button>
+          )}
+
+          {onEditMotivation && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                onEditMotivation();
+                setIsOpen(false);
+              }}
+              className="whitespace-nowrap text-sm"
+            >
+              <Heart className="h-4 w-4 mr-2" />
+              💌 სამოტივაციო
             </Button>
           )}
 

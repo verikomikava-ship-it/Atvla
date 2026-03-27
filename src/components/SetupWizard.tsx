@@ -970,6 +970,33 @@ export const SetupWizard: React.FC<SetupWizardProps> = ({
                 )}
               </div>
 
+              {/* სამოტივაციო წერილი */}
+              <div className="space-y-2 p-3 rounded-xl bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800">
+                <div className="text-center">
+                  <span className="text-lg">💌</span>
+                  <p className="text-sm font-bold text-purple-700 dark:text-purple-300">დაუწერე წერილი შენს თავს</p>
+                  <p className="text-[10px] text-purple-500 dark:text-purple-400">ეს შეტყობინება ყოველდღე გაგიხსენებს შენს მიზნებს</p>
+                </div>
+                <textarea
+                  value={profile.motivationalMessage || ''}
+                  onChange={e => setProfile({ ...profile, motivationalMessage: e.target.value })}
+                  className={cn(inputClass, 'min-h-[80px] resize-none text-sm')}
+                  placeholder="მაგ: შენ ამას შეძლებ! გააგრძელე და არასოდეს არ დანებდე. შენი ოცნება ახდება! 💪"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-purple-600 dark:text-purple-400">⏰ რა საათზე გაგახსენო?</span>
+                  <select
+                    value={profile.motivationHour ?? 9}
+                    onChange={e => setProfile({ ...profile, motivationHour: parseInt(e.target.value) })}
+                    className="bg-white dark:bg-slate-800 text-sm px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-700"
+                  >
+                    {Array.from({ length: 24 }, (_, i) => (
+                      <option key={i} value={i}>{i.toString().padStart(2, '0')}:00</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <Button variant="secondary" onClick={() => setStep(2)} className="flex-1">
                   <ArrowLeft className="w-4 h-4 mr-1" /> უკან
