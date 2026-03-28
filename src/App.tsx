@@ -335,9 +335,14 @@ export const App: React.FC = () => {
 
   const handleToggleBillPaid = useCallback(
     (id: number) => {
+      const bill = state.bills.find(b => b.id === id);
+      const wasPaid = bill?.paid ?? false;
+      const amount = bill?.amount ?? 0;
+      const walletAdj = wasPaid ? amount : -amount; // unpay → refund, pay → deduct
       const newState: AppState = {
         ...state,
         bills: state.bills.map((b) => (b.id === id ? { ...b, paid: !b.paid } : b)),
+        walletBalance: (state.walletBalance ?? 0) + walletAdj,
       };
       updateState(newState);
     },
@@ -393,11 +398,16 @@ export const App: React.FC = () => {
 
   const handleToggleSubscriptionPaid = useCallback(
     (id: number) => {
+      const sub = (state.subscriptions || []).find(s => s.id === id);
+      const wasPaid = sub?.paid ?? false;
+      const amount = sub?.amount ?? 0;
+      const walletAdj = wasPaid ? amount : -amount;
       const newState: AppState = {
         ...state,
         subscriptions: (state.subscriptions || []).map((s) =>
           s.id === id ? { ...s, paid: !s.paid } : s
         ),
+        walletBalance: (state.walletBalance ?? 0) + walletAdj,
       };
       updateState(newState);
     },
@@ -1339,15 +1349,15 @@ export const App: React.FC = () => {
                           </div>
                           <div className="space-y-1.5">
                             {monthlyBills.map(b => (
-                              <div key={b.id} className={cn("flex items-center justify-between px-3 py-2 rounded-xl text-sm", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50")}>
+                              <button key={b.id} onClick={() => handleToggleBillPaid(b.id)} className={cn("w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors active:scale-[0.98]", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50")}>
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px]", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
+                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
                                     {b.paid && '✓'}
                                   </span>
                                   <span className={cn("font-medium", b.paid && "line-through opacity-50")}>{b.name}</span>
                                 </div>
                                 <span className={cn("font-bold", b.paid ? "text-green-600 dark:text-green-400" : "text-slate-700 dark:text-slate-300")}>{b.amount.toLocaleString()}₾</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1363,15 +1373,15 @@ export const App: React.FC = () => {
                           </div>
                           <div className="space-y-1.5">
                             {monthlyBank.map(b => (
-                              <div key={b.id} className={cn("flex items-center justify-between px-3 py-2 rounded-xl text-sm", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50")}>
+                              <button key={b.id} onClick={() => handleToggleBillPaid(b.id)} className={cn("w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors active:scale-[0.98]", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50")}>
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px]", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
+                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
                                     {b.paid && '✓'}
                                   </span>
                                   <span className={cn("font-medium", b.paid && "line-through opacity-50")}>{b.name.replace('🏦 ', '')}</span>
                                 </div>
                                 <span className={cn("font-bold", b.paid ? "text-green-600 dark:text-green-400" : "text-slate-700 dark:text-slate-300")}>{b.amount.toLocaleString()}₾</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1387,15 +1397,15 @@ export const App: React.FC = () => {
                           </div>
                           <div className="space-y-1.5">
                             {utilBills.map(b => (
-                              <div key={b.id} className={cn("flex items-center justify-between px-3 py-2 rounded-xl text-sm", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50")}>
+                              <button key={b.id} onClick={() => handleToggleBillPaid(b.id)} className={cn("w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors active:scale-[0.98]", b.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50")}>
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px]", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
+                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors", b.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
                                     {b.paid && '✓'}
                                   </span>
                                   <span className={cn("font-medium", b.paid && "line-through opacity-50")}>{b.name}</span>
                                 </div>
                                 <span className={cn("font-bold", b.paid ? "text-green-600 dark:text-green-400" : "text-slate-700 dark:text-slate-300")}>{b.amount.toLocaleString()}₾</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1411,15 +1421,15 @@ export const App: React.FC = () => {
                           </div>
                           <div className="space-y-1.5">
                             {monthlySubs.map(s => (
-                              <div key={s.id} className={cn("flex items-center justify-between px-3 py-2 rounded-xl text-sm", s.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50")}>
+                              <button key={s.id} onClick={() => handleToggleSubscriptionPaid(s.id)} className={cn("w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors active:scale-[0.98]", s.paid ? "bg-green-50 dark:bg-green-900/10" : "bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50")}>
                                 <div className="flex items-center gap-2">
-                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px]", s.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
+                                  <span className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center text-[10px] transition-colors", s.paid ? "border-green-500 bg-green-500 text-white" : "border-slate-300 dark:border-slate-600")}>
                                     {s.paid && '✓'}
                                   </span>
                                   <span className={cn("font-medium", s.paid && "line-through opacity-50")}>{s.name}</span>
                                 </div>
                                 <span className={cn("font-bold", s.paid ? "text-green-600 dark:text-green-400" : "text-slate-700 dark:text-slate-300")}>{s.amount.toLocaleString()}₾</span>
-                              </div>
+                              </button>
                             ))}
                           </div>
                         </div>
