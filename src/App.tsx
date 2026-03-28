@@ -1241,24 +1241,6 @@ export const App: React.FC = () => {
                       />
                     </div>
 
-                    {/* ── ყოველთვიური გადასახდელი ── */}
-                    <div className="border-t border-blue-200/60 dark:border-blue-800/40 p-3 pb-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-1 h-4 rounded-full bg-indigo-400"></div>
-                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">📅 ყოველთვიური გადასახდელი</span>
-                        {bankBillsTotal > 0 && <span className="ml-auto text-[10px] font-bold text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-full px-2 py-0.5">{bankBillsTotal.toLocaleString()}₾</span>}
-                      </div>
-                      <BillsManager
-                        state={state}
-                        selectedMonth={selectedMonth}
-                        onAddBill={handleAddBill}
-                        onRemoveBill={handleRemoveBill}
-                        onToggleBillPaid={handleToggleBillPaid}
-                        onEditBill={handleEditBill}
-                        filterPrefix="🏦"
-                      />
-                    </div>
-
                     {/* ── სესხების მართვა ── */}
                     <div className="border-t border-blue-200/60 dark:border-blue-800/40 p-3">
                       <div className="flex items-center gap-2 mb-2">
