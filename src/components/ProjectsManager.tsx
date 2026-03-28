@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { AppState, Project } from '../types';
+import { AppState, Project, ProjectType, VACATION_CATEGORIES } from '../types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ const COMPACT_BTN = 'h-7 text-[11px]';
 
 interface ProjectsManagerProps {
   state: AppState;
-  onAddProject: (name: string, description?: string) => void;
+  onAddProject: (name: string, description?: string, type?: ProjectType) => void;
   onRemoveProject: (id: number) => void;
   onEditProject: (id: number, updates: Partial<Project>) => void;
   onAddInventoryItem: (projectId: number, name: string, cost: number) => void;
@@ -41,6 +41,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [projectTemplate, setProjectTemplate] = useState<ProjectType>('standard');
 
   // ინვენტარის დამატება
   const [addingInventoryFor, setAddingInventoryFor] = useState<number | null>(null);
@@ -68,10 +69,11 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
   const handleAddProject = () => {
     if (!newName.trim()) return;
-    onAddProject(newName.trim(), newDesc.trim() || undefined);
+    onAddProject(newName.trim(), newDesc.trim() || undefined, projectTemplate);
     setNewName('');
     setNewDesc('');
     setShowAddForm(false);
+    setProjectTemplate('standard');
   };
 
   const handleAddInventory = (projectId: number) => {
@@ -161,7 +163,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 className="flex-1 text-left"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-lg">🏗️</span>
+                  <span className="text-lg">{project.type === 'vacation' ? '🏖️' : '🏗️'}</span>
                   <div>
                     <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200">{project.name}</h3>
                     {project.description && (
@@ -188,7 +190,9 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-2 text-center">
-                  <div className="text-indigo-600 dark:text-indigo-400 font-bold">📦 ინვენტარი</div>
+                  <div className="text-indigo-600 dark:text-indigo-400 font-bold">
+                    {project.type === 'vacation' ? '🏖️ ბიუჯეტი' : '📦 ინვენტარი'}
+                  </div>
                   <div className="font-bold text-sm text-slate-800 dark:text-slate-200">{inventoryTotal.toLocaleString()}₾</div>
                   {inventoryTotal > 0 && (
                     <Progress value={purchaseProgress} className="h-1 mt-1" />
@@ -254,7 +258,10 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <h4 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                    <Package className="w-3 h-3" /> ინვენტარი / ერთჯერადი ხარჯები
+                    {project.type === 'vacation'
+                      ? <><span className="text-sm">🏖️</span> შვებულების ხარჯები</>
+                      : <><Package className="w-3 h-3" /> ინვენტარი / ერთჯერადი ხარჯები</>
+                    }
                   </h4>
                   <button
                     onClick={() => {
@@ -291,6 +298,26 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                   </div>
                 )}
 
+                {/* შვებულების კატეგორიების quick-add */}
+                {project.type === 'vacation' && (() => {
+                  const missing = VACATION_CATEGORIES.filter(
+                    cat => !project.inventoryItems.some(item => item.name === cat.name)
+                  );
+                  return missing.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {missing.map(cat => (
+                        <button
+                          key={cat.name}
+                          onClick={() => onAddInventoryItem(project.id, cat.name, 0)}
+                          className="text-[10px] px-2 py-1 rounded-full bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/40 transition-colors"
+                        >
+                          + {cat.name}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null;
+                })()}
+
                 {/* ინვენტარის სია */}
                 {project.inventoryItems.length === 0 ? (
                   <p className="text-[10px] text-slate-400 italic">ჯერ არაფერი დამატებული</p>
@@ -318,7 +345,12 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                           {item.purchased && <Check className="w-3 h-3" />}
                         </button>
                         <span className="flex-1">{item.name}</span>
-                        <span className="font-bold text-slate-600 dark:text-slate-300">{item.cost.toLocaleString()}₾</span>
+                        <span className="font-bold text-slate-600 dark:text-slate-300">
+                          {item.cost === 0 && project.type === 'vacation'
+                            ? <span className="text-slate-400 italic font-normal">ბიუჯეტი?</span>
+                            : `${item.cost.toLocaleString()}₾`
+                          }
+                        </span>
                         <button
                           onClick={() => onRemoveInventoryItem(project.id, item.id)}
                           className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
@@ -400,11 +432,15 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               {/* ===== სამარი ბლოკი ===== */}
               <div className="bg-gradient-to-r from-indigo-50 to-amber-50 dark:from-indigo-900/20 dark:to-amber-900/20 rounded-xl p-3 space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-400">📦 ინვენტარი სულ:</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    {project.type === 'vacation' ? '🏖️ შვებულების ბიუჯეტი:' : '📦 ინვენტარი სულ:'}
+                  </span>
                   <span className="font-bold">{getProjectTotals(project).inventoryTotal.toLocaleString()}₾</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-slate-600 dark:text-slate-400">✅ ნაყიდი:</span>
+                  <span className="text-slate-600 dark:text-slate-400">
+                    {project.type === 'vacation' ? '✅ გადახდილი:' : '✅ ნაყიდი:'}
+                  </span>
                   <span className="font-bold text-green-600">{getProjectTotals(project).inventoryPurchased.toLocaleString()}₾</span>
                 </div>
                 <div className="flex justify-between text-xs">
@@ -422,7 +458,9 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                 </div>
                 <hr className="border-slate-200 dark:border-slate-700" />
                 <div className="flex justify-between text-xs font-bold">
-                  <span className="text-slate-800 dark:text-slate-200">💰 გახსნის ჯამური ხარჯი:</span>
+                  <span className="text-slate-800 dark:text-slate-200">
+                    {project.type === 'vacation' ? '💰 სრული ბიუჯეტი:' : '💰 გახსნის ჯამური ხარჯი:'}
+                  </span>
                   <span className="text-indigo-600 dark:text-indigo-400">
                     {(getProjectTotals(project).inventoryTotal + getProjectTotals(project).monthlyTotal).toLocaleString()}₾
                   </span>
@@ -496,13 +534,49 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
 
       {/* ახალი პროექტის დამატება */}
       {showAddForm ? (
-        <Card className="border-2 border-dashed border-indigo-300 dark:border-indigo-700">
+        <Card className={cn(
+          'border-2 border-dashed',
+          projectTemplate === 'vacation'
+            ? 'border-cyan-300 dark:border-cyan-700'
+            : 'border-indigo-300 dark:border-indigo-700'
+        )}>
           <CardContent className="p-3 space-y-2">
+            {/* Template picker */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setProjectTemplate('standard')}
+                className={cn(
+                  'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center',
+                  projectTemplate === 'standard'
+                    ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
+                    : 'border-border hover:border-border/80'
+                )}
+              >
+                <span className="text-xl">🏗️</span>
+                <span className="text-[11px] font-bold">ბიზნეს პროექტი</span>
+              </button>
+              <button
+                onClick={() => setProjectTemplate('vacation')}
+                className={cn(
+                  'flex flex-col items-center gap-1 p-2.5 rounded-xl border-2 transition-all text-center',
+                  projectTemplate === 'vacation'
+                    ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/30'
+                    : 'border-border hover:border-border/80'
+                )}
+              >
+                <span className="text-xl">🏖️</span>
+                <span className="text-[11px] font-bold">შვებულება</span>
+              </button>
+            </div>
+
             <Input
               value={newName}
               onChange={e => setNewName(e.target.value)}
               className={COMPACT_INPUT}
-              placeholder="პროექტის სახელი (მაგ: საცხობი)"
+              placeholder={projectTemplate === 'vacation'
+                ? 'სახელი (მაგ: ბათუმი 2026)'
+                : 'პროექტის სახელი (მაგ: საცხობი)'
+              }
               onKeyDown={e => e.key === 'Enter' && handleAddProject()}
               autoFocus
             />
@@ -510,13 +584,40 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
               value={newDesc}
               onChange={e => setNewDesc(e.target.value)}
               className={COMPACT_INPUT}
-              placeholder="აღწერა (არასავალდებულო)"
+              placeholder={projectTemplate === 'vacation'
+                ? 'თარიღები / ადგილი (არასავალდებულო)'
+                : 'აღწერა (არასავალდებულო)'
+              }
             />
+
+            {projectTemplate === 'vacation' && (
+              <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-2">
+                <p className="text-[10px] text-cyan-700 dark:text-cyan-300 font-medium mb-1">
+                  ✨ ავტომატურად დაემატება კატეგორიები:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {VACATION_CATEGORIES.map(cat => (
+                    <span key={cat.name} className="text-[9px] bg-white dark:bg-slate-800 px-1.5 py-0.5 rounded-full border border-cyan-200 dark:border-cyan-700">
+                      {cat.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-1">
-              <Button size="sm" className={cn(COMPACT_BTN, 'flex-1 bg-indigo-600 hover:bg-indigo-700')} onClick={handleAddProject}>
-                <Plus className="w-3 h-3 mr-1" /> შექმნა
+              <Button
+                size="sm"
+                className={cn(COMPACT_BTN, 'flex-1',
+                  projectTemplate === 'vacation'
+                    ? 'bg-cyan-600 hover:bg-cyan-700'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                )}
+                onClick={handleAddProject}
+              >
+                <Plus className="w-3 h-3 mr-1" /> {projectTemplate === 'vacation' ? 'შვებულების დაგეგმვა' : 'შექმნა'}
               </Button>
-              <Button size="sm" variant="outline" className={COMPACT_BTN} onClick={() => setShowAddForm(false)}>
+              <Button size="sm" variant="outline" className={COMPACT_BTN} onClick={() => { setShowAddForm(false); setProjectTemplate('standard'); }}>
                 გაუქმება
               </Button>
             </div>
@@ -528,7 +629,7 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
           className={cn(COMPACT_BTN, 'w-full bg-indigo-600 hover:bg-indigo-700')}
           onClick={() => setShowAddForm(true)}
         >
-          <Plus className="w-3 h-3 mr-1" /> ახალი პროექტი
+          <Plus className="w-3 h-3 mr-1" /> ახალი პროექტი / შვებულება
         </Button>
       )}
 

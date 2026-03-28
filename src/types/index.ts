@@ -274,10 +274,25 @@ export type ProjectMonthlyCost = {
   amount: number;             // ყოველთვიური თანხა
 };
 
+export type ProjectType = 'standard' | 'vacation';
+
+export const VACATION_CATEGORIES: { name: string; icon: string }[] = [
+  { name: '🏨 საცხოვრებელი', icon: '🏨' },
+  { name: '✈️ ბილეთები', icon: '✈️' },
+  { name: '🚗 ტრანსპორტი', icon: '🚗' },
+  { name: '🍽️ საკვები / რესტორანი', icon: '🍽️' },
+  { name: '🛍️ შოპინგი', icon: '🛍️' },
+  { name: '🎭 გართობა / ექსკურსიები', icon: '🎭' },
+  { name: '💊 დაზღვევა', icon: '💊' },
+  { name: '🎁 სუვენირები', icon: '🎁' },
+  { name: '💰 სხვა', icon: '💰' },
+];
+
 export type Project = {
   id: number;
   name: string;               // მაგ: "საცხობი"
   description?: string;       // აღწერა (სურვილისამებრ)
+  type?: ProjectType;         // 'standard' | 'vacation'
   inventoryItems: ProjectItem[];
   monthlyCosts: ProjectMonthlyCost[];
   active: boolean;

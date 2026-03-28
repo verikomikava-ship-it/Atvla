@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { AppState, DayData, Debt, DebtPriority, UserProfile, Bill, Subscription, Loan, Lombard, BankLoan, BankProductType, Project } from '@/types';
+import { AppState, DayData, Debt, DebtPriority, UserProfile, Bill, Subscription, Loan, Lombard, BankLoan, BankProductType, Project, ProjectType, VACATION_CATEGORIES } from '@/types';
 import { useAppState } from '@/hooks/useAppState';
 import { useAuth } from '@/hooks/useAuth';
 import { useFirestoreSync } from '@/hooks/useFirestoreSync';
@@ -672,12 +672,16 @@ export const App: React.FC = () => {
   }, [updateState]);
 
   // ===== პროექტები =====
-  const handleAddProject = useCallback((name: string, description?: string) => {
+  const handleAddProject = useCallback((name: string, description?: string, type?: ProjectType) => {
+    const ts = Date.now();
     const newProject: Project = {
-      id: Date.now(),
+      id: ts,
       name,
       description,
-      inventoryItems: [],
+      type: type || 'standard',
+      inventoryItems: type === 'vacation'
+        ? VACATION_CATEGORIES.map((cat, i) => ({ id: ts + i + 1, name: cat.name, cost: 0, purchased: false }))
+        : [],
       monthlyCosts: [],
       active: true,
       createdAt: new Date().toISOString().split('T')[0],
