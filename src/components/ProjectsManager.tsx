@@ -61,6 +61,10 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
 
+  // ინვენტარის თანხის ინლაინ რედაქტირება
+  const [editingItemKey, setEditingItemKey] = useState<string | null>(null); // "projectId-itemId"
+  const [editItemCost, setEditItemCost] = useState('');
+
   const projects = useMemo(() => state.projects || [], [state.projects]);
   const activeProjects = useMemo(() => projects.filter(p => p.active), [projects]);
   const archivedProjects = useMemo(() => projects.filter(p => !p.active), [projects]);
@@ -345,12 +349,53 @@ export const ProjectsManager: React.FC<ProjectsManagerProps> = ({
                           {item.purchased && <Check className="w-3 h-3" />}
                         </button>
                         <span className="flex-1">{item.name}</span>
-                        <span className="font-bold text-slate-600 dark:text-slate-300">
-                          {item.cost === 0 && project.type === 'vacation'
-                            ? <span className="text-slate-400 italic font-normal">ბიუჯეტი?</span>
-                            : `${item.cost.toLocaleString()}₾`
-                          }
-                        </span>
+                        {editingItemKey === `${project.id}-${item.id}` ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              autoFocus
+                              value={editItemCost}
+                              onChange={e => setEditItemCost(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  const newCost = Math.max(0, parseFloat(editItemCost) || 0);
+                                  onEditProject(project.id, {
+                                    inventoryItems: project.inventoryItems.map(i =>
+                                      i.id === item.id ? { ...i, cost: newCost } : i
+                                    ),
+                                  });
+                                  setEditingItemKey(null);
+                                }
+                                if (e.key === 'Escape') setEditingItemKey(null);
+                              }}
+                              onBlur={() => {
+                                const newCost = Math.max(0, parseFloat(editItemCost) || 0);
+                                onEditProject(project.id, {
+                                  inventoryItems: project.inventoryItems.map(i =>
+                                    i.id === item.id ? { ...i, cost: newCost } : i
+                                  ),
+                                });
+                                setEditingItemKey(null);
+                              }}
+                              className="w-20 h-6 text-xs text-right font-bold border border-indigo-300 dark:border-indigo-600 rounded px-1 bg-white dark:bg-slate-900"
+                              placeholder="₾"
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              setEditingItemKey(`${project.id}-${item.id}`);
+                              setEditItemCost(item.cost > 0 ? item.cost.toString() : '');
+                            }}
+                            className="font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                          >
+                            {item.cost === 0 && project.type === 'vacation'
+                              ? <span className="text-slate-400 italic font-normal hover:text-indigo-500">✏️ ბიუჯეტი?</span>
+                              : `${item.cost.toLocaleString()}₾`
+                            }
+                          </button>
+                        )}
                         <button
                           onClick={() => onRemoveInventoryItem(project.id, item.id)}
                           className="p-0.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
