@@ -24,7 +24,7 @@ import { SetupWizard } from '@/components/SetupWizard';
 import { AuthModal } from '@/components/AuthModal';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/hooks/useTheme';
-import { Menu, X, Cloud, CloudOff, Moon, Sun } from 'lucide-react';
+import { Menu, X, Cloud, CloudOff, Moon, Sun, ChevronDown } from 'lucide-react';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -45,6 +45,7 @@ export const App: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
   const [activeTab, setActiveTab] = useState<'debts' | 'projects' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<{ cash?: boolean; bank?: boolean; monthly?: boolean; lent?: boolean }>({});
   const [showAuth, setShowAuth] = useState(false);
   const [showMotivation, setShowMotivation] = useState(false);
   const [showMotivationEditor, setShowMotivationEditor] = useState(false);
@@ -1052,154 +1053,229 @@ export const App: React.FC = () => {
             const monthlyBills = state.bills.filter(b => !b.name.startsWith('🏦') && (b.reset_month ?? 0) === curMonth);
             const monthlyBank = state.bills.filter(b => b.name.startsWith('🏦') && (b.reset_month ?? 0) === curMonth);
             const monthlySubs = (state.subscriptions || []).filter(s => (s.reset_month ?? 0) === curMonth);
-            const monthlyTotal = monthlyBills.reduce((s, b) => s + b.amount, 0) + monthlyBank.reduce((s, b) => s + b.amount, 0) + monthlySubs.reduce((s, b) => s + b.amount, 0);
+            const billsTotal = monthlyBills.reduce((s, b) => s + b.amount, 0);
+            const bankBillsTotal = monthlyBank.reduce((s, b) => s + b.amount, 0);
+            const subsTotal = monthlySubs.reduce((s, b) => s + b.amount, 0);
+            const monthlyTotal = billsTotal + bankBillsTotal + subsTotal;
+            const lentOut = state.loans?.filter(l => !l.returned).reduce((s, l) => s + l.amount, 0) || 0;
 
             return (
             <>
               {/* ═══ საერთო შეჯამება ═══ */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-xl p-3 text-center">
-                  <p className="text-[10px] opacity-80">💰 სულ ძირი ვალი</p>
-                  <p className="text-lg font-black">{(personalPrincipal + bankPrincipal).toLocaleString()}₾</p>
-                  <div className="flex justify-center gap-3 text-[9px] opacity-70 mt-1">
-                    <span>💸 {personalPrincipal.toLocaleString()}</span>
-                    <span>🏦 {bankPrincipal.toLocaleString()}</span>
+                <div className="bg-gradient-to-br from-red-500 via-rose-500 to-pink-600 text-white rounded-2xl p-3 text-center shadow-lg shadow-red-500/20">
+                  <p className="text-[10px] uppercase tracking-wider opacity-80 font-medium">სულ ძირი ვალი</p>
+                  <p className="text-xl font-black mt-0.5">{(personalPrincipal + bankPrincipal).toLocaleString()}₾</p>
+                  <div className="flex justify-center gap-3 mt-1.5">
+                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">💸 {personalPrincipal.toLocaleString()}</span>
+                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">🏦 {bankPrincipal.toLocaleString()}</span>
                   </div>
                 </div>
-                <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl p-3 text-center">
-                  <p className="text-[10px] opacity-80">📅 ყოველთვიური</p>
-                  <p className="text-lg font-black">{monthlyTotal.toLocaleString()}₾</p>
-                  <div className="flex justify-center gap-3 text-[9px] opacity-70 mt-1">
-                    <span>📅 {monthlyBills.reduce((s, b) => s + b.amount, 0).toLocaleString()}</span>
-                    <span>🏦 {monthlyBank.reduce((s, b) => s + b.amount, 0).toLocaleString()}</span>
+                <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 text-white rounded-2xl p-3 text-center shadow-lg shadow-amber-500/20">
+                  <p className="text-[10px] uppercase tracking-wider opacity-80 font-medium">ყოველთვიური</p>
+                  <p className="text-xl font-black mt-0.5">{monthlyTotal.toLocaleString()}₾</p>
+                  <div className="flex justify-center gap-3 mt-1.5">
+                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">📋 {billsTotal.toLocaleString()}</span>
+                    <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">🏦 {bankBillsTotal.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
-              {/* ═══ ქეშ ვალები ═══ */}
-              <div className="rounded-xl border border-red-200 dark:border-red-800 overflow-hidden">
-                <div className="bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 flex items-center justify-between">
-                  <span>💸 ქეშ ვალები</span>
-                  {personalPrincipal > 0 && <span className="text-red-500 font-black">{personalPrincipal.toLocaleString()}₾</span>}
-                </div>
-                <div className="p-2">
-                  <DebtsManager
-                    state={state}
-                    onAddDebt={handleAddDebt}
-                    onRemoveDebt={handleRemoveDebt}
-                    onToggleDebtPaid={handleToggleDebtPaid}
-                    onPayDebtPart={handlePayDebtPart}
-                    onEditDebt={handleEditDebt}
-                    filterPrefix=""
-                  />
-                </div>
-              </div>
-
-              {/* ═══ ბანკის ვალები ═══ */}
-              <div className="rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center justify-between">
-                  <span>🏦 ბანკის ვალები</span>
-                  {bankPrincipal > 0 && <span className="text-blue-500 font-black">{bankPrincipal.toLocaleString()}₾</span>}
-                </div>
-
-                {/* ძირი თანხა */}
-                <div className="px-3 pt-2 pb-1">
-                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">📌 ძირი თანხა</p>
-                </div>
-                <div className="px-2 pb-2">
-                  <DebtsManager
-                    state={state}
-                    onAddDebt={handleAddDebt}
-                    onRemoveDebt={handleRemoveDebt}
-                    onToggleDebtPaid={handleToggleDebtPaid}
-                    onPayDebtPart={handlePayDebtPart}
-                    onEditDebt={handleEditDebt}
-                    filterPrefix="🏦"
-                  />
-                </div>
-
-                {/* ყოველთვიური პროცენტები */}
-                <div className="border-t border-blue-100 dark:border-blue-800">
-                  <div className="px-3 pt-2 pb-1">
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">📅 ყოველთვიური გადასახდელი</p>
+              {/* ═══ 1. ქეშ ვალები ═══ */}
+              <div className="rounded-2xl overflow-hidden shadow-sm border border-red-100 dark:border-red-900/40">
+                <button
+                  onClick={() => setCollapsedSections(p => ({ ...p, cash: !p.cash }))}
+                  className="w-full bg-gradient-to-r from-red-500 to-rose-500 px-4 py-2.5 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm">💸</span>
+                    <span className="text-white font-bold text-sm">ქეშ ვალები</span>
                   </div>
-                  <div className="px-2 pb-2">
-                    <BillsManager
+                  <div className="flex items-center gap-2">
+                    {personalPrincipal > 0 && <span className="bg-white/25 text-white font-black text-xs rounded-full px-2.5 py-0.5">{personalPrincipal.toLocaleString()}₾</span>}
+                    <ChevronDown className={cn("h-4 w-4 text-white/80 transition-transform", collapsedSections.cash && "-rotate-90")} />
+                  </div>
+                </button>
+                {!collapsedSections.cash && (
+                  <div className="bg-red-50/50 dark:bg-red-950/10 p-3">
+                    <DebtsManager
                       state={state}
-                      selectedMonth={selectedMonth}
-                      onAddBill={handleAddBill}
-                      onRemoveBill={handleRemoveBill}
-                      onToggleBillPaid={handleToggleBillPaid}
-                      onEditBill={handleEditBill}
-                      filterPrefix="🏦"
+                      onAddDebt={handleAddDebt}
+                      onRemoveDebt={handleRemoveDebt}
+                      onToggleDebtPaid={handleToggleDebtPaid}
+                      onPayDebtPart={handlePayDebtPart}
+                      onEditDebt={handleEditDebt}
+                      filterPrefix=""
                     />
                   </div>
-                </div>
+                )}
+              </div>
 
-                {/* სესხების მართვა */}
-                <div className="border-t border-blue-100 dark:border-blue-800">
-                  <div className="px-3 pt-2 pb-1">
-                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">⚙️ სესხების მართვა</p>
+              {/* ═══ 2. ბანკის ვალები ═══ */}
+              <div className="rounded-2xl overflow-hidden shadow-sm border border-blue-100 dark:border-blue-900/40">
+                <button
+                  onClick={() => setCollapsedSections(p => ({ ...p, bank: !p.bank }))}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 px-4 py-2.5 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm">🏦</span>
+                    <span className="text-white font-bold text-sm">ბანკის ვალები</span>
                   </div>
-                  <div className="px-2 pb-2">
-                    <BankLoansManager
+                  <div className="flex items-center gap-2">
+                    {bankPrincipal > 0 && <span className="bg-white/25 text-white font-black text-xs rounded-full px-2.5 py-0.5">{bankPrincipal.toLocaleString()}₾</span>}
+                    <ChevronDown className={cn("h-4 w-4 text-white/80 transition-transform", collapsedSections.bank && "-rotate-90")} />
+                  </div>
+                </button>
+                {!collapsedSections.bank && (
+                  <div className="bg-blue-50/50 dark:bg-blue-950/10">
+                    {/* ── ძირი თანხა ── */}
+                    <div className="p-3 pb-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-blue-400"></div>
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">📌 ძირი თანხა</span>
+                      </div>
+                      <DebtsManager
+                        state={state}
+                        onAddDebt={handleAddDebt}
+                        onRemoveDebt={handleRemoveDebt}
+                        onToggleDebtPaid={handleToggleDebtPaid}
+                        onPayDebtPart={handlePayDebtPart}
+                        onEditDebt={handleEditDebt}
+                        filterPrefix="🏦"
+                      />
+                    </div>
+
+                    {/* ── ყოველთვიური გადასახდელი ── */}
+                    <div className="border-t border-blue-200/60 dark:border-blue-800/40 p-3 pb-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-indigo-400"></div>
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">📅 ყოველთვიური გადასახდელი</span>
+                        {bankBillsTotal > 0 && <span className="ml-auto text-[10px] font-bold text-blue-500 bg-blue-100 dark:bg-blue-900/30 rounded-full px-2 py-0.5">{bankBillsTotal.toLocaleString()}₾</span>}
+                      </div>
+                      <BillsManager
+                        state={state}
+                        selectedMonth={selectedMonth}
+                        onAddBill={handleAddBill}
+                        onRemoveBill={handleRemoveBill}
+                        onToggleBillPaid={handleToggleBillPaid}
+                        onEditBill={handleEditBill}
+                        filterPrefix="🏦"
+                      />
+                    </div>
+
+                    {/* ── სესხების მართვა ── */}
+                    <div className="border-t border-blue-200/60 dark:border-blue-800/40 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-violet-400"></div>
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300">⚙️ სესხების მართვა</span>
+                      </div>
+                      <BankLoansManager
+                        state={state}
+                        onAddBankLoan={handleAddBankLoan}
+                        onRemoveBankLoan={handleRemoveBankLoan}
+                        onEditBankLoan={handleEditBankLoan}
+                        onToggleBillPaid={handleToggleBillPaid}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ═══ 3. ყოველთვიური გადასახდელები ═══ */}
+              <div className="rounded-2xl overflow-hidden shadow-sm border border-amber-100 dark:border-amber-900/40">
+                <button
+                  onClick={() => setCollapsedSections(p => ({ ...p, monthly: !p.monthly }))}
+                  className="w-full bg-gradient-to-r from-amber-500 to-orange-500 px-4 py-2.5 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm">📅</span>
+                    <span className="text-white font-bold text-sm">ყოველთვიური გადასახდელები</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {monthlyTotal > 0 && <span className="bg-white/25 text-white font-black text-xs rounded-full px-2.5 py-0.5">{monthlyTotal.toLocaleString()}₾</span>}
+                    <ChevronDown className={cn("h-4 w-4 text-white/80 transition-transform", collapsedSections.monthly && "-rotate-90")} />
+                  </div>
+                </button>
+                {!collapsedSections.monthly && (
+                  <div className="bg-amber-50/50 dark:bg-amber-950/10">
+                    {/* ── ბილები ── */}
+                    <div className="p-3 pb-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-amber-400"></div>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">📋 ბილები</span>
+                        {billsTotal > 0 && <span className="ml-auto text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 rounded-full px-2 py-0.5">{billsTotal.toLocaleString()}₾</span>}
+                      </div>
+                      <BillsManager
+                        state={state}
+                        selectedMonth={selectedMonth}
+                        onAddBill={handleAddBill}
+                        onRemoveBill={handleRemoveBill}
+                        onToggleBillPaid={handleToggleBillPaid}
+                        onEditBill={handleEditBill}
+                        filterPrefix=""
+                      />
+                    </div>
+
+                    {/* ── კომუნალური ── */}
+                    <div className="border-t border-amber-200/60 dark:border-amber-800/40 p-3 pb-2">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-orange-400"></div>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">🏠 კომუნალური</span>
+                      </div>
+                      <UtilitiesManager
+                        state={state}
+                        selectedMonth={selectedMonth}
+                        onToggleBillPaid={handleToggleBillPaid}
+                        onAddUtility={(name, amount) => handleAddBill(name, amount, true)}
+                      />
+                    </div>
+
+                    {/* ── გამოწერები ── */}
+                    <div className="border-t border-amber-200/60 dark:border-amber-800/40 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-1 h-4 rounded-full bg-yellow-400"></div>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">🔄 გამოწერები</span>
+                        {subsTotal > 0 && <span className="ml-auto text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 rounded-full px-2 py-0.5">{subsTotal.toLocaleString()}₾</span>}
+                      </div>
+                      <SubscriptionsManager
+                        state={state}
+                        selectedMonth={selectedMonth}
+                        onAddSubscription={handleAddSubscription}
+                        onRemoveSubscription={handleRemoveSubscription}
+                        onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
+                        onEditSubscription={handleEditSubscription}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ═══ 4. გასესხებული ═══ */}
+              <div className="rounded-2xl overflow-hidden shadow-sm border border-teal-100 dark:border-teal-900/40">
+                <button
+                  onClick={() => setCollapsedSections(p => ({ ...p, lent: !p.lent }))}
+                  className="w-full bg-gradient-to-r from-teal-500 to-emerald-500 px-4 py-2.5 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="bg-white/20 rounded-lg w-7 h-7 flex items-center justify-center text-sm">🤝</span>
+                    <span className="text-white font-bold text-sm">გასესხებული (სხვას)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {lentOut > 0 && <span className="bg-white/25 text-white font-black text-xs rounded-full px-2.5 py-0.5">{lentOut.toLocaleString()}₾</span>}
+                    <ChevronDown className={cn("h-4 w-4 text-white/80 transition-transform", collapsedSections.lent && "-rotate-90")} />
+                  </div>
+                </button>
+                {!collapsedSections.lent && (
+                  <div className="bg-teal-50/50 dark:bg-teal-950/10 p-3">
+                    <LoansManager
                       state={state}
-                      onAddBankLoan={handleAddBankLoan}
-                      onRemoveBankLoan={handleRemoveBankLoan}
-                      onEditBankLoan={handleEditBankLoan}
-                      onToggleBillPaid={handleToggleBillPaid}
+                      onAddLoan={handleAddLoan}
+                      onRemoveLoan={handleRemoveLoan}
+                      onToggleLoanReturned={handleToggleLoanReturned}
+                      onEditLoan={handleEditLoan}
                     />
                   </div>
-                </div>
-              </div>
-
-              {/* ═══ ყოველთვიური გადასახდელები ═══ */}
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
-                <div className="bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-between">
-                  <span>📅 ყოველთვიური გადასახდელები</span>
-                  {monthlyTotal > 0 && <span className="text-amber-500 font-black">{monthlyTotal.toLocaleString()}₾</span>}
-                </div>
-                <div className="p-2 space-y-2">
-                  <BillsManager
-                    state={state}
-                    selectedMonth={selectedMonth}
-                    onAddBill={handleAddBill}
-                    onRemoveBill={handleRemoveBill}
-                    onToggleBillPaid={handleToggleBillPaid}
-                    onEditBill={handleEditBill}
-                    filterPrefix=""
-                  />
-                  <UtilitiesManager
-                    state={state}
-                    selectedMonth={selectedMonth}
-                    onToggleBillPaid={handleToggleBillPaid}
-                    onAddUtility={(name, amount) => handleAddBill(name, amount, true)}
-                  />
-                  <SubscriptionsManager
-                    state={state}
-                    selectedMonth={selectedMonth}
-                    onAddSubscription={handleAddSubscription}
-                    onRemoveSubscription={handleRemoveSubscription}
-                    onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
-                    onEditSubscription={handleEditSubscription}
-                  />
-                </div>
-              </div>
-
-              {/* ═══ გასესხებული ═══ */}
-              <div className="rounded-xl border border-teal-200 dark:border-teal-800 overflow-hidden">
-                <div className="bg-teal-50 dark:bg-teal-900/20 px-3 py-2 text-xs font-bold text-teal-700 dark:text-teal-300">
-                  🤝 გასესხებული (სხვას)
-                </div>
-                <div className="p-2">
-                  <LoansManager
-                    state={state}
-                    onAddLoan={handleAddLoan}
-                    onRemoveLoan={handleRemoveLoan}
-                    onToggleLoanReturned={handleToggleLoanReturned}
-                    onEditLoan={handleEditLoan}
-                  />
-                </div>
+                )}
               </div>
             </>
             );
