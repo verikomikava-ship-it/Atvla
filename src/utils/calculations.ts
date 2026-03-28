@@ -144,24 +144,6 @@ export const calculateStats = (
     totalExp += exp;
   });
 
-  state.bills.forEach((b) => {
-    if (b.paid) {
-      totalExp += +b.amount || 0;
-    }
-  });
-
-  state.debts.forEach((d) => {
-    if (d.paid) {
-      totalExp += +d.amount || 0;
-    }
-  });
-
-  (state.subscriptions || []).forEach((s) => {
-    if (s.paid) {
-      totalExp += +s.amount || 0;
-    }
-  });
-
   return { totalInc, totalExp, totalKulaba };
 };
 
