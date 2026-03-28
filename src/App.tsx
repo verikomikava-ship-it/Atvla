@@ -51,8 +51,7 @@ export const App: React.FC = () => {
   const [showDebtsModal, setShowDebtsModal] = useState(false);
   const [debtPayInputId, setDebtPayInputId] = useState<number | null>(null);
   const [debtPayAmount, setDebtPayAmount] = useState('');
-  const [editingBalance, setEditingBalance] = useState(false);
-  const [balanceInput, setBalanceInput] = useState('');
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showMotivation, setShowMotivation] = useState(false);
   const [showMotivationEditor, setShowMotivationEditor] = useState(false);
@@ -122,6 +121,24 @@ export const App: React.FC = () => {
     },
     [state, updateState]
   );
+
+  const handleStartMonth = useCallback(() => {
+    const profile = state.profile;
+    if (!profile) return;
+    // თვიური შემოსავლის გამოთვლა
+    let monthlyIncome = profile.salary || 0;
+    (profile.additionalIncomes || []).forEach(ai => {
+      if (ai.frequency === 'daily') monthlyIncome += ai.amount * 30;
+      else if (ai.frequency === 'weekly') monthlyIncome += ai.amount * 4;
+      else if (ai.frequency === 'biweekly') monthlyIncome += (ai.amount * 26) / 12;
+      else monthlyIncome += ai.amount;
+    });
+    const curMonth = selectedMonth !== '' ? parseInt(selectedMonth) : new Date().getMonth();
+    // ყველა ბილი/გამოწერა unpaid
+    const newBills = state.bills.map(b => (b.reset_month ?? 0) === curMonth ? { ...b, paid: false } : b);
+    const newSubs = (state.subscriptions || []).map(s => (s.reset_month ?? 0) === curMonth ? { ...s, paid: false } : s);
+    updateState({ ...state, walletBalance: monthlyIncome, bills: newBills, subscriptions: newSubs });
+  }, [state, selectedMonth, updateState]);
 
   const handleSaveDay = useCallback(
     (date: string, data: DayData, debtPayments?: { debtId: number; amount: number }[], billPayments?: { billId: number; paid: boolean }[]) => {
@@ -1122,56 +1139,34 @@ export const App: React.FC = () => {
                 </button>
               </div>
 
-              {/* ═══ ბალანსის კორექცია ═══ */}
-              <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 px-4 py-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">👛</span>
-                  <div>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">მიმდინარე ბალანსი</p>
-                    <p className={cn("text-sm font-black", (state.walletBalance ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>
-                      {(state.walletBalance ?? 0).toLocaleString()}₾
-                    </p>
+              {/* ═══ თვის დაწყება ═══ */}
+              {!showResetConfirm ? (
+                <button
+                  onClick={() => setShowResetConfirm(true)}
+                  className="w-full rounded-2xl border-2 border-dashed border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/10 px-4 py-3 flex items-center justify-center gap-2 hover:bg-emerald-100 dark:hover:bg-emerald-900/20 active:scale-[0.98] transition-all"
+                >
+                  <span className="text-lg">🔄</span>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">თვის ნულიდან დაწყება</p>
+                    <p className="text-[10px] text-emerald-600/70 dark:text-emerald-400/70">ბალანსი = შემოსავალი, გადასახდელები = 0</p>
+                  </div>
+                </button>
+              ) : (
+                <div className="rounded-2xl border-2 border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/10 px-4 py-3 space-y-2">
+                  <p className="text-xs font-bold text-orange-700 dark:text-orange-300">⚠️ დარწმუნებული ხარ?</p>
+                  <p className="text-[10px] text-orange-600 dark:text-orange-400">ბალანსი დაუბრუნდება თვიურ შემოსავალს და ყველა გადასახდელი გადაუხდელად ჩაითვლება.</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { handleStartMonth(); setShowResetConfirm(false); }}
+                      className="flex-1 h-8 text-xs font-bold bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 active:scale-95 transition-all"
+                    >✓ დიახ, დავიწყო</button>
+                    <button
+                      onClick={() => setShowResetConfirm(false)}
+                      className="flex-1 h-8 text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600"
+                    >გაუქმება</button>
                   </div>
                 </div>
-                {editingBalance ? (
-                  <div className="flex gap-1.5 items-center">
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      autoFocus
-                      value={balanceInput}
-                      onChange={e => setBalanceInput(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          const val = parseFloat(balanceInput);
-                          if (!isNaN(val)) { handleWalletUpdate(val); setEditingBalance(false); }
-                        }
-                        if (e.key === 'Escape') setEditingBalance(false);
-                      }}
-                      placeholder="თანხა ₾"
-                      className="w-24 h-7 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-green-400"
-                    />
-                    <button
-                      onClick={() => {
-                        const val = parseFloat(balanceInput);
-                        if (!isNaN(val)) { handleWalletUpdate(val); setEditingBalance(false); }
-                      }}
-                      className="h-7 px-2.5 text-[11px] font-bold bg-green-500 text-white rounded-lg hover:bg-green-600 active:scale-95"
-                    >✓</button>
-                    <button
-                      onClick={() => setEditingBalance(false)}
-                      className="h-7 px-2 text-[11px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg"
-                    >✕</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => { setBalanceInput((state.walletBalance ?? 0).toString()); setEditingBalance(true); }}
-                    className="h-7 px-3 text-[11px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 active:scale-95 transition-all flex items-center gap-1"
-                  >
-                    ✏️ კორექცია
-                  </button>
-                )}
-              </div>
+              )}
 
               {/* ═══ 1. ქეშ ვალები ═══ */}
               <div className="rounded-2xl overflow-hidden shadow-sm border border-red-100 dark:border-red-900/40">
