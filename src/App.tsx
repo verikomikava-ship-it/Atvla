@@ -134,10 +134,19 @@ export const App: React.FC = () => {
       else monthlyIncome += ai.amount;
     });
     const curMonth = selectedMonth !== '' ? parseInt(selectedMonth) : new Date().getMonth();
+    const year = new Date().getFullYear();
     // ყველა ბილი/გამოწერა unpaid
     const newBills = state.bills.map(b => (b.reset_month ?? 0) === curMonth ? { ...b, paid: false } : b);
     const newSubs = (state.subscriptions || []).map(s => (s.reset_month ?? 0) === curMonth ? { ...s, paid: false } : s);
-    updateState({ ...state, walletBalance: monthlyIncome, bills: newBills, subscriptions: newSubs });
+    // ამ თვის db ჩანაწერების წაშლა (შემოსავალი/გასავალი ნულდება)
+    const newDb = { ...state.db };
+    Object.keys(newDb).forEach(key => {
+      const d = new Date(key);
+      if (d.getMonth() === curMonth && d.getFullYear() === year) {
+        delete newDb[key];
+      }
+    });
+    updateState({ ...state, walletBalance: monthlyIncome, bills: newBills, subscriptions: newSubs, db: newDb });
   }, [state, selectedMonth, updateState]);
 
   const handleSaveDay = useCallback(
