@@ -48,6 +48,9 @@ export const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<{ cash?: boolean; bank?: boolean; monthly?: boolean; lent?: boolean }>({});
   const [showMonthlyModal, setShowMonthlyModal] = useState(false);
+  const [showDebtsModal, setShowDebtsModal] = useState(false);
+  const [debtPayInputId, setDebtPayInputId] = useState<number | null>(null);
+  const [debtPayAmount, setDebtPayAmount] = useState('');
   const [showAuth, setShowAuth] = useState(false);
   const [showMotivation, setShowMotivation] = useState(false);
   const [showMotivationEditor, setShowMotivationEditor] = useState(false);
@@ -266,6 +269,25 @@ export const App: React.FC = () => {
             paid: newPaidParts >= totalParts,
           };
         }),
+      };
+      updateState(newState);
+    },
+    [state, updateState]
+  );
+
+  const handlePayDebtAmount = useCallback(
+    (id: number, payAmount: number) => {
+      if (payAmount <= 0) return;
+      const debt = state.debts.find(d => d.id === id);
+      if (!debt) return;
+      const remaining = debt.amount - (debt.paidAmount || 0);
+      const actual = Math.min(payAmount, remaining);
+      const newPaidAmount = (debt.paidAmount || 0) + actual;
+      const fullyPaid = newPaidAmount >= debt.amount;
+      const newState: AppState = {
+        ...state,
+        debts: state.debts.map(d => d.id === id ? { ...d, paidAmount: newPaidAmount, paid: fullyPaid } : d),
+        walletBalance: (state.walletBalance ?? 0) - actual,
       };
       updateState(newState);
     },
@@ -1078,14 +1100,15 @@ export const App: React.FC = () => {
             <>
               {/* ═══ საერთო შეჯამება ═══ */}
               <div className="grid grid-cols-2 gap-2">
-                <div className="bg-gradient-to-br from-red-500 via-rose-500 to-pink-600 text-white rounded-2xl p-3 text-center shadow-lg shadow-red-500/20">
+                <button onClick={() => setShowDebtsModal(true)} className="bg-gradient-to-br from-red-500 via-rose-500 to-pink-600 text-white rounded-2xl p-3 text-center shadow-lg shadow-red-500/20 active:scale-95 transition-transform">
                   <p className="text-[10px] uppercase tracking-wider opacity-80 font-medium">სულ ძირი ვალი</p>
                   <p className="text-xl font-black mt-0.5">{(personalPrincipal + bankPrincipal).toLocaleString()}₾</p>
                   <div className="flex justify-center gap-3 mt-1.5">
                     <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">💸 {personalPrincipal.toLocaleString()}</span>
                     <span className="bg-white/20 rounded-full px-2 py-0.5 text-[9px] font-medium">🏦 {bankPrincipal.toLocaleString()}</span>
                   </div>
-                </div>
+                  <p className="text-[9px] opacity-60 mt-1">დააჭირე დეტალებისთვის</p>
+                </button>
                 <button onClick={() => setShowMonthlyModal(true)} className="bg-gradient-to-br from-amber-500 via-orange-500 to-orange-600 text-white rounded-2xl p-3 text-center shadow-lg shadow-amber-500/20 active:scale-95 transition-transform">
                   <p className="text-[10px] uppercase tracking-wider opacity-80 font-medium">ყოველთვიური</p>
                   <p className="text-xl font-black mt-0.5">{monthlyTotal.toLocaleString()}₾</p>
@@ -1293,6 +1316,228 @@ export const App: React.FC = () => {
                   </div>
                 )}
               </div>
+              {/* ═══ ძირი ვალის მოდალი ═══ */}
+              {showDebtsModal && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center" onClick={() => { setShowDebtsModal(false); setDebtPayInputId(null); }}>
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                  <div
+                    className="relative w-full max-w-md max-h-[85vh] bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-300"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {/* ჰედერი */}
+                    <div className="bg-gradient-to-r from-red-500 via-rose-500 to-pink-600 px-5 py-4 text-white">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-lg font-black">💰 ძირი ვალები</p>
+                          <p className="text-xs opacity-80 mt-0.5">სულ დარჩენილი: {(personalPrincipal + bankPrincipal).toLocaleString()}₾</p>
+                        </div>
+                        <button onClick={() => { setShowDebtsModal(false); setDebtPayInputId(null); }} className="bg-white/20 rounded-full p-1.5 hover:bg-white/30 transition-colors">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {/* პროგრესი */}
+                      {(() => {
+                        const allDebts = state.debts.filter(d => !d.name.startsWith('🏦') || true);
+                        const totalAmount = allDebts.reduce((s, d) => s + d.amount, 0);
+                        const totalPaid = allDebts.reduce((s, d) => s + (d.paidAmount || 0) + (d.paid ? d.amount - (d.paidAmount || 0) : 0), 0);
+                        const pct = totalAmount > 0 ? Math.round((totalPaid / totalAmount) * 100) : 0;
+                        return totalAmount > 0 ? (
+                          <div className="mt-3">
+                            <div className="flex justify-between text-[10px] opacity-80 mb-1">
+                              <span>{totalPaid.toLocaleString()}₾ / {totalAmount.toLocaleString()}₾ გადახდილი</span>
+                              <span>{pct}%</span>
+                            </div>
+                            <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                              <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        ) : null;
+                      })()}
+                    </div>
+
+                    {/* კონტენტი */}
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      {/* ქეშ ვალები */}
+                      {personalDebts.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1 h-4 rounded-full bg-red-400"></div>
+                            <span className="text-xs font-bold text-red-700 dark:text-red-300">💸 ქეშ ვალები</span>
+                            <span className="ml-auto text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-900/30 rounded-full px-2 py-0.5">{personalPrincipal.toLocaleString()}₾</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {personalDebts.map(d => {
+                              const remaining = d.amount - (d.paidAmount || 0);
+                              const pct = d.amount > 0 ? Math.round(((d.paidAmount || 0) / d.amount) * 100) : 0;
+                              return (
+                                <div key={d.id} className="rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800/50">
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-slate-800 dark:text-slate-200 truncate">{d.name}</p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-slate-500">სულ: {d.amount.toLocaleString()}₾</span>
+                                        {(d.paidAmount || 0) > 0 && <span className="text-[10px] text-green-600">გადახდილი: {(d.paidAmount || 0).toLocaleString()}₾</span>}
+                                      </div>
+                                    </div>
+                                    <div className="text-right ml-2">
+                                      <p className="font-black text-red-600 dark:text-red-400">{remaining.toLocaleString()}₾</p>
+                                      {pct > 0 && <p className="text-[9px] text-green-600">{pct}%</p>}
+                                    </div>
+                                  </div>
+                                  {/* პროგრეს ბარი */}
+                                  {pct > 0 && (
+                                    <div className="px-3 pb-1">
+                                      <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* თანხის გადახდის ღილაკი / ინფუთი */}
+                                  {remaining > 0 && (
+                                    <div className="px-3 pb-2 pt-1">
+                                      {debtPayInputId === d.id ? (
+                                        <div className="flex gap-1.5">
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            autoFocus
+                                            placeholder={`მაქს ${remaining.toLocaleString()}₾`}
+                                            value={debtPayAmount}
+                                            onChange={e => setDebtPayAmount(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') {
+                                                const val = parseInt(debtPayAmount);
+                                                if (val > 0) { handlePayDebtAmount(d.id, val); setDebtPayInputId(null); setDebtPayAmount(''); }
+                                              }
+                                              if (e.key === 'Escape') { setDebtPayInputId(null); setDebtPayAmount(''); }
+                                            }}
+                                            className="flex-1 h-7 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-red-400"
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              const val = parseInt(debtPayAmount);
+                                              if (val > 0) { handlePayDebtAmount(d.id, val); setDebtPayInputId(null); setDebtPayAmount(''); }
+                                            }}
+                                            className="h-7 px-3 text-[11px] font-bold bg-green-500 text-white rounded-lg hover:bg-green-600 active:scale-95 transition-all"
+                                          >გადახდა</button>
+                                          <button
+                                            onClick={() => { setDebtPayInputId(null); setDebtPayAmount(''); }}
+                                            className="h-7 px-2 text-[11px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                                          >✕</button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => { setDebtPayInputId(d.id); setDebtPayAmount(''); }}
+                                          className="w-full h-7 text-[11px] font-medium bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/40 active:scale-[0.98] transition-all"
+                                        >💳 თანხის ჩამოჭრა</button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ბანკის ვალები */}
+                      {bankDebts.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-1 h-4 rounded-full bg-blue-400"></div>
+                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300">🏦 ბანკის ვალები</span>
+                            <span className="ml-auto text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 rounded-full px-2 py-0.5">{bankPrincipal.toLocaleString()}₾</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {bankDebts.map(d => {
+                              const remaining = d.amount - (d.paidAmount || 0);
+                              const pct = d.amount > 0 ? Math.round(((d.paidAmount || 0) / d.amount) * 100) : 0;
+                              return (
+                                <div key={d.id} className="rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-800/50">
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-slate-800 dark:text-slate-200 truncate">{d.name.replace('🏦 ', '')}</p>
+                                      <div className="flex items-center gap-2 mt-0.5">
+                                        <span className="text-[10px] text-slate-500">სულ: {d.amount.toLocaleString()}₾</span>
+                                        {(d.paidAmount || 0) > 0 && <span className="text-[10px] text-green-600">გადახდილი: {(d.paidAmount || 0).toLocaleString()}₾</span>}
+                                      </div>
+                                    </div>
+                                    <div className="text-right ml-2">
+                                      <p className="font-black text-blue-600 dark:text-blue-400">{remaining.toLocaleString()}₾</p>
+                                      {pct > 0 && <p className="text-[9px] text-green-600">{pct}%</p>}
+                                    </div>
+                                  </div>
+                                  {pct > 0 && (
+                                    <div className="px-3 pb-1">
+                                      <div className="h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                        <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {remaining > 0 && (
+                                    <div className="px-3 pb-2 pt-1">
+                                      {debtPayInputId === d.id ? (
+                                        <div className="flex gap-1.5">
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            autoFocus
+                                            placeholder={`მაქს ${remaining.toLocaleString()}₾`}
+                                            value={debtPayAmount}
+                                            onChange={e => setDebtPayAmount(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') {
+                                                const val = parseInt(debtPayAmount);
+                                                if (val > 0) { handlePayDebtAmount(d.id, val); setDebtPayInputId(null); setDebtPayAmount(''); }
+                                              }
+                                              if (e.key === 'Escape') { setDebtPayInputId(null); setDebtPayAmount(''); }
+                                            }}
+                                            className="flex-1 h-7 px-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-2 focus:ring-blue-400"
+                                          />
+                                          <button
+                                            onClick={() => {
+                                              const val = parseInt(debtPayAmount);
+                                              if (val > 0) { handlePayDebtAmount(d.id, val); setDebtPayInputId(null); setDebtPayAmount(''); }
+                                            }}
+                                            className="h-7 px-3 text-[11px] font-bold bg-green-500 text-white rounded-lg hover:bg-green-600 active:scale-95 transition-all"
+                                          >გადახდა</button>
+                                          <button
+                                            onClick={() => { setDebtPayInputId(null); setDebtPayAmount(''); }}
+                                            className="h-7 px-2 text-[11px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600"
+                                          >✕</button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => { setDebtPayInputId(d.id); setDebtPayAmount(''); }}
+                                          className="w-full h-7 text-[11px] font-medium bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/40 active:scale-[0.98] transition-all"
+                                        >💳 თანხის ჩამოჭრა</button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {personalDebts.length === 0 && bankDebts.length === 0 && (
+                        <p className="text-center text-slate-400 py-8">ძირი ვალი არ არის 🎉</p>
+                      )}
+                    </div>
+
+                    {/* ფუტერი */}
+                    <div className="border-t border-slate-200 dark:border-slate-700 px-5 py-3 bg-slate-50 dark:bg-slate-800/50">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">ბალანსი:</span>
+                        <span className={cn("text-lg font-black", (state.walletBalance ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400")}>{(state.walletBalance ?? 0).toLocaleString()}₾</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+
               {/* ═══ ყოველთვიური მოდალი ═══ */}
               {showMonthlyModal && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center" onClick={() => setShowMonthlyModal(false)}>
