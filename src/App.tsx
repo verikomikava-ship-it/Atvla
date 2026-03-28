@@ -43,7 +43,7 @@ export const App: React.FC = () => {
   } = useAuth();
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth().toString());
-  const [activeTab, setActiveTab] = useState<'debts' | 'payments' | 'projects' | 'stats'>('payments');
+  const [activeTab, setActiveTab] = useState<'debts' | 'projects' | 'stats'>('debts');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showMotivation, setShowMotivation] = useState(false);
@@ -893,8 +893,7 @@ export const App: React.FC = () => {
   }
 
   const tabs = [
-    { key: 'debts' as const, label: 'ვალები', icon: '💸' },
-    { key: 'payments' as const, label: 'გადასახდელები', icon: '📅' },
+    { key: 'debts' as const, label: 'ვალდებულებები', icon: '💸' },
     { key: 'projects' as const, label: 'პროექტები', icon: '🏗️' },
     { key: 'stats' as const, label: 'სტატისტიკა', icon: '📊' },
   ];
@@ -1043,28 +1042,71 @@ export const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
 
           {/* ===== 💸 ვალები — ყველაფერი ერთად ===== */}
-          {activeTab === 'debts' && (
-            <>
-              {/* პირადი ვალები */}
-              <div className="bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                💸 პირადი ვალები
-              </div>
-              <DebtsManager
-                state={state}
-                onAddDebt={handleAddDebt}
-                onRemoveDebt={handleRemoveDebt}
-                onToggleDebtPaid={handleToggleDebtPaid}
-                onPayDebtPart={handlePayDebtPart}
-                onEditDebt={handleEditDebt}
-                filterPrefix=""
-              />
+          {activeTab === 'debts' && (() => {
+            // გამოთვლები summary-სთვის
+            const personalDebts = state.debts.filter(d => !d.paid && !d.name.startsWith('🏦'));
+            const bankDebts = state.debts.filter(d => !d.paid && d.name.startsWith('🏦'));
+            const personalPrincipal = personalDebts.reduce((s, d) => s + d.amount - (d.paidAmount || 0), 0);
+            const bankPrincipal = bankDebts.reduce((s, d) => s + d.amount - (d.paidAmount || 0), 0);
+            const curMonth = selectedMonth !== '' ? parseInt(selectedMonth) : new Date().getMonth();
+            const monthlyBills = state.bills.filter(b => !b.name.startsWith('🏦') && (b.reset_month ?? 0) === curMonth);
+            const monthlyBank = state.bills.filter(b => b.name.startsWith('🏦') && (b.reset_month ?? 0) === curMonth);
+            const monthlySubs = (state.subscriptions || []).filter(s => (s.reset_month ?? 0) === curMonth);
+            const monthlyTotal = monthlyBills.reduce((s, b) => s + b.amount, 0) + monthlyBank.reduce((s, b) => s + b.amount, 0) + monthlySubs.reduce((s, b) => s + b.amount, 0);
 
-              {/* ბანკის ძირი თანხები */}
-              {state.debts.some(d => d.name.startsWith('🏦')) && (
-                <>
-                  <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                    🏦 ბანკის ძირი თანხები
+            return (
+            <>
+              {/* ═══ საერთო შეჯამება ═══ */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gradient-to-br from-red-500 to-rose-600 text-white rounded-xl p-3 text-center">
+                  <p className="text-[10px] opacity-80">💰 სულ ძირი ვალი</p>
+                  <p className="text-lg font-black">{(personalPrincipal + bankPrincipal).toLocaleString()}₾</p>
+                  <div className="flex justify-center gap-3 text-[9px] opacity-70 mt-1">
+                    <span>💸 {personalPrincipal.toLocaleString()}</span>
+                    <span>🏦 {bankPrincipal.toLocaleString()}</span>
                   </div>
+                </div>
+                <div className="bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl p-3 text-center">
+                  <p className="text-[10px] opacity-80">📅 ყოველთვიური</p>
+                  <p className="text-lg font-black">{monthlyTotal.toLocaleString()}₾</p>
+                  <div className="flex justify-center gap-3 text-[9px] opacity-70 mt-1">
+                    <span>📅 {monthlyBills.reduce((s, b) => s + b.amount, 0).toLocaleString()}</span>
+                    <span>🏦 {monthlyBank.reduce((s, b) => s + b.amount, 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ═══ ქეშ ვალები ═══ */}
+              <div className="rounded-xl border border-red-200 dark:border-red-800 overflow-hidden">
+                <div className="bg-red-50 dark:bg-red-900/20 px-3 py-2 text-xs font-bold text-red-700 dark:text-red-300 flex items-center justify-between">
+                  <span>💸 ქეშ ვალები</span>
+                  {personalPrincipal > 0 && <span className="text-red-500 font-black">{personalPrincipal.toLocaleString()}₾</span>}
+                </div>
+                <div className="p-2">
+                  <DebtsManager
+                    state={state}
+                    onAddDebt={handleAddDebt}
+                    onRemoveDebt={handleRemoveDebt}
+                    onToggleDebtPaid={handleToggleDebtPaid}
+                    onPayDebtPart={handlePayDebtPart}
+                    onEditDebt={handleEditDebt}
+                    filterPrefix=""
+                  />
+                </div>
+              </div>
+
+              {/* ═══ ბანკის ვალები ═══ */}
+              <div className="rounded-xl border border-blue-200 dark:border-blue-800 overflow-hidden">
+                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center justify-between">
+                  <span>🏦 ბანკის ვალები</span>
+                  {bankPrincipal > 0 && <span className="text-blue-500 font-black">{bankPrincipal.toLocaleString()}₾</span>}
+                </div>
+
+                {/* ძირი თანხა */}
+                <div className="px-3 pt-2 pb-1">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">📌 ძირი თანხა</p>
+                </div>
+                <div className="px-2 pb-2">
                   <DebtsManager
                     state={state}
                     onAddDebt={handleAddDebt}
@@ -1074,82 +1116,50 @@ export const App: React.FC = () => {
                     onEditDebt={handleEditDebt}
                     filterPrefix="🏦"
                   />
-                </>
-              )}
+                </div>
 
-              {/* სესხების მართვა */}
-              <div className="bg-gradient-to-r from-purple-500 to-violet-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                🏦 სესხების მართვა
-              </div>
-              <BankLoansManager
-                state={state}
-                onAddBankLoan={handleAddBankLoan}
-                onRemoveBankLoan={handleRemoveBankLoan}
-                onEditBankLoan={handleEditBankLoan}
-                onToggleBillPaid={handleToggleBillPaid}
-              />
-
-              {/* გასესხებული */}
-              <div className="bg-gradient-to-r from-teal-500 to-emerald-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                🤝 გასესხებული (სხვას)
-              </div>
-              <LoansManager
-                state={state}
-                onAddLoan={handleAddLoan}
-                onRemoveLoan={handleRemoveLoan}
-                onToggleLoanReturned={handleToggleLoanReturned}
-                onEditLoan={handleEditLoan}
-              />
-            </>
-          )}
-
-          {/* ===== 📅 გადასახდელები — ყველაფერი ერთად ===== */}
-          {activeTab === 'payments' && (
-            <>
-              {/* ყოველთვიური ბილები */}
-              <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                📅 ყოველთვიური გადასახადები
-              </div>
-              <BillsManager
-                state={state}
-                selectedMonth={selectedMonth}
-                onAddBill={handleAddBill}
-                onRemoveBill={handleRemoveBill}
-                onToggleBillPaid={handleToggleBillPaid}
-                onEditBill={handleEditBill}
-                filterPrefix=""
-              />
-
-              {/* კომუნალური */}
-              <div className="bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                ⚡ კომუნალური
-              </div>
-              <UtilitiesManager
-                state={state}
-                selectedMonth={selectedMonth}
-                onToggleBillPaid={handleToggleBillPaid}
-                onAddUtility={(name, amount) => handleAddBill(name, amount, true)}
-              />
-
-              {/* გამოწერები */}
-              <div className="bg-gradient-to-r from-pink-500 to-rose-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                🔄 გამოწერები
-              </div>
-              <SubscriptionsManager
-                state={state}
-                selectedMonth={selectedMonth}
-                onAddSubscription={handleAddSubscription}
-                onRemoveSubscription={handleRemoveSubscription}
-                onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
-                onEditSubscription={handleEditSubscription}
-              />
-
-              {/* ბანკის პროცენტები */}
-              {state.bills.some(b => b.name.startsWith('🏦')) && (
-                <>
-                  <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl px-3 py-2 text-xs font-bold">
-                    🏦 ბანკის პროცენტები
+                {/* ყოველთვიური პროცენტები */}
+                <div className="border-t border-blue-100 dark:border-blue-800">
+                  <div className="px-3 pt-2 pb-1">
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">📅 ყოველთვიური გადასახდელი</p>
                   </div>
+                  <div className="px-2 pb-2">
+                    <BillsManager
+                      state={state}
+                      selectedMonth={selectedMonth}
+                      onAddBill={handleAddBill}
+                      onRemoveBill={handleRemoveBill}
+                      onToggleBillPaid={handleToggleBillPaid}
+                      onEditBill={handleEditBill}
+                      filterPrefix="🏦"
+                    />
+                  </div>
+                </div>
+
+                {/* სესხების მართვა */}
+                <div className="border-t border-blue-100 dark:border-blue-800">
+                  <div className="px-3 pt-2 pb-1">
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-1">⚙️ სესხების მართვა</p>
+                  </div>
+                  <div className="px-2 pb-2">
+                    <BankLoansManager
+                      state={state}
+                      onAddBankLoan={handleAddBankLoan}
+                      onRemoveBankLoan={handleRemoveBankLoan}
+                      onEditBankLoan={handleEditBankLoan}
+                      onToggleBillPaid={handleToggleBillPaid}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ═══ ყოველთვიური გადასახდელები ═══ */}
+              <div className="rounded-xl border border-amber-200 dark:border-amber-800 overflow-hidden">
+                <div className="bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center justify-between">
+                  <span>📅 ყოველთვიური გადასახდელები</span>
+                  {monthlyTotal > 0 && <span className="text-amber-500 font-black">{monthlyTotal.toLocaleString()}₾</span>}
+                </div>
+                <div className="p-2 space-y-2">
                   <BillsManager
                     state={state}
                     selectedMonth={selectedMonth}
@@ -1157,12 +1167,43 @@ export const App: React.FC = () => {
                     onRemoveBill={handleRemoveBill}
                     onToggleBillPaid={handleToggleBillPaid}
                     onEditBill={handleEditBill}
-                    filterPrefix="🏦"
+                    filterPrefix=""
                   />
-                </>
-              )}
+                  <UtilitiesManager
+                    state={state}
+                    selectedMonth={selectedMonth}
+                    onToggleBillPaid={handleToggleBillPaid}
+                    onAddUtility={(name, amount) => handleAddBill(name, amount, true)}
+                  />
+                  <SubscriptionsManager
+                    state={state}
+                    selectedMonth={selectedMonth}
+                    onAddSubscription={handleAddSubscription}
+                    onRemoveSubscription={handleRemoveSubscription}
+                    onToggleSubscriptionPaid={handleToggleSubscriptionPaid}
+                    onEditSubscription={handleEditSubscription}
+                  />
+                </div>
+              </div>
+
+              {/* ═══ გასესხებული ═══ */}
+              <div className="rounded-xl border border-teal-200 dark:border-teal-800 overflow-hidden">
+                <div className="bg-teal-50 dark:bg-teal-900/20 px-3 py-2 text-xs font-bold text-teal-700 dark:text-teal-300">
+                  🤝 გასესხებული (სხვას)
+                </div>
+                <div className="p-2">
+                  <LoansManager
+                    state={state}
+                    onAddLoan={handleAddLoan}
+                    onRemoveLoan={handleRemoveLoan}
+                    onToggleLoanReturned={handleToggleLoanReturned}
+                    onEditLoan={handleEditLoan}
+                  />
+                </div>
+              </div>
             </>
-          )}
+            );
+          })()}
 
           {/* ===== 🏗️ პროექტები ===== */}
           {activeTab === 'projects' && (
