@@ -921,6 +921,50 @@ export const App: React.FC = () => {
 
         <main className="px-3 py-2 space-y-2">
           <SmartAdvisor state={state} selectedMonth={selectedMonth} />
+
+          {/* პროექტების summary widget */}
+          {(state.projects || []).filter(p => p.active).length > 0 && (() => {
+            const activeProjects = (state.projects || []).filter(p => p.active);
+            const totalInv = activeProjects.reduce((s, p) => s + p.inventoryItems.reduce((si, i) => si + i.cost, 0), 0);
+            const totalPurchased = activeProjects.reduce((s, p) => s + p.inventoryItems.filter(i => i.purchased).reduce((si, i) => si + i.cost, 0), 0);
+            const progress = totalInv > 0 ? Math.round((totalPurchased / totalInv) * 100) : 0;
+            return (
+              <button
+                onClick={() => { setActiveTab('projects'); setSidebarOpen(true); }}
+                className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl p-3 text-white text-left hover:from-indigo-600 hover:to-purple-700 transition-all shadow-md active:scale-[0.98]"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold opacity-90">🏗️ ჩემი პროექტები ({activeProjects.length})</span>
+                  <span className="text-[10px] opacity-70">დააჭირე სანახავად →</span>
+                </div>
+                <div className="flex gap-3">
+                  {activeProjects.slice(0, 3).map(p => (
+                    <div key={p.id} className="flex-1 bg-white/15 rounded-lg p-2 min-w-0">
+                      <p className="text-[10px] truncate font-semibold">{p.type === 'vacation' ? '🏖️' : '🏗️'} {p.name}</p>
+                      <p className="text-sm font-black">{p.inventoryItems.reduce((s, i) => s + i.cost, 0).toLocaleString()}₾</p>
+                    </div>
+                  ))}
+                  {activeProjects.length > 3 && (
+                    <div className="flex items-center justify-center bg-white/15 rounded-lg px-2">
+                      <span className="text-xs font-bold">+{activeProjects.length - 3}</span>
+                    </div>
+                  )}
+                </div>
+                {totalInv > 0 && (
+                  <div className="mt-2">
+                    <div className="flex justify-between text-[10px] opacity-80 mb-0.5">
+                      <span>ნაყიდი: {totalPurchased.toLocaleString()}₾ / {totalInv.toLocaleString()}₾</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-white/80 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+                )}
+              </button>
+            );
+          })()}
+
           <DiaryView state={state} selectedMonth={selectedMonth} />
           <EventsView state={state} selectedMonth={selectedMonth} />
           <Calendar state={state} selectedMonth={selectedMonth} onDaySelect={setSelectedDay} />
